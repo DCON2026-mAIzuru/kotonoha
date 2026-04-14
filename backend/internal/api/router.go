@@ -5,6 +5,7 @@ import (
 
 	"github.com/apple/kotonoha/backend/internal/api/handlers"
 	"github.com/apple/kotonoha/backend/internal/api/middleware"
+	"github.com/apple/kotonoha/backend/internal/realtime"
 	"github.com/apple/kotonoha/backend/internal/service"
 	pkgauth "github.com/apple/kotonoha/backend/pkg/auth"
 	"github.com/apple/kotonoha/backend/pkg/config"
@@ -17,6 +18,9 @@ type Dependencies struct {
 	HealthService           *service.HealthService
 	ProfileService          *service.ProfileService
 	PushSubscriptionService *service.PushSubscriptionService
+	ChatService             *service.ChatService
+	SensorService           *service.SensorService
+	RealtimeHub             *realtime.Hub
 	JWTVerifier             *pkgauth.SupabaseJWTVerifier
 }
 
@@ -27,7 +31,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	engine.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{deps.Config.BackendAllowedOrigin},
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowHeaders:     []string{"Authorization", "Content-Type", "X-Sensor-Token"},
+		AllowHeaders:     []string{"Authorization", "Content-Type", "X-Sensor-Token", "X-Sensor-User-ID"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
@@ -37,10 +41,13 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	authHandler := handlers.NewAuthHandler()
 	profileHandler := handlers.NewProfileHandler(deps.ProfileService)
 	pushSubscriptionHandler := handlers.NewPushSubscriptionHandler(deps.PushSubscriptionService)
+	chatHandler := handlers.NewChatHandler(deps.ChatService, deps.RealtimeHub, deps.Config.BackendAllowedOrigin)
+	sensorHandler := handlers.NewSensorHandler(deps.SensorService, deps.Config.SensorSharedToken)
 	authMiddleware := middleware.RequireAuth(deps.JWTVerifier)
 
 	engine.GET("/healthz", healthHandler.Liveness)
 	engine.GET("/readyz", healthHandler.Readiness)
+	engine.GET("/ws/chat", authMiddleware, chatHandler.Chat)
 
 	apiV1 := engine.Group("/api/v1")
 	{
@@ -58,6 +65,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		pushRoutes.GET("/subscriptions", pushSubscriptionHandler.List)
 		pushRoutes.POST("/subscribe", pushSubscriptionHandler.Upsert)
 		pushRoutes.DELETE("/subscriptions/:id", pushSubscriptionHandler.Delete)
+
+		apiV1.POST("/sensor", sensorHandler.Ingest)
 	}
 
 	return engine

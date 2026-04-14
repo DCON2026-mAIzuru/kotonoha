@@ -3,9 +3,11 @@ module github.com/apple/kotonoha/backend
 go 1.26.0
 
 require (
+	github.com/SherClockHolmes/webpush-go v1.4.0
 	github.com/gin-contrib/cors v1.7.6
 	github.com/gin-gonic/gin v1.11.0
 	github.com/golang-jwt/jwt/v5 v5.2.2
+	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/joho/godotenv v1.5.1
 )
