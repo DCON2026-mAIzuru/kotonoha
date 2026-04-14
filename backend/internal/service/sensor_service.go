@@ -18,6 +18,7 @@ import (
 const (
 	sensorStatusNormal      = "normal"
 	sensorStatusStale       = "stale"
+	sensorStatusInvalid     = "invalid"
 	sensorEventRole         = "event"
 	sensorEventNameWatering = "watering_detected"
 	sensorEventSource       = "sensor_event"
@@ -103,12 +104,6 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		return nil, errors.New("light_lux が不正です")
 	case math.IsNaN(input.TemperatureCelsius) || math.IsInf(input.TemperatureCelsius, 0):
 		return nil, errors.New("temperature_celsius が不正です")
-	case input.MoisturePercent < 0 || input.MoisturePercent > 100:
-		return nil, errors.New("moisture_percent は 0〜100 で入力してください")
-	case input.LightLux < 0:
-		return nil, errors.New("light_lux は 0 以上で入力してください")
-	case input.TemperatureCelsius < -50 || input.TemperatureCelsius > 100:
-		return nil, errors.New("temperature_celsius は -50〜100 で入力してください")
 	}
 
 	previous, err := s.store.GetSensorDataByUserID(ctx, input.UserID)
@@ -121,20 +116,23 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		return nil, ErrSensorReadingOutOfOrder
 	}
 
+	status, sanitizedMoisture, sanitizedLight, sanitizedTemperature, issues := normalizeSensorReading(input, time.Now().UTC())
+
 	sensorData, err := s.store.UpsertSensorData(ctx, models.UpsertSensorDataInput{
 		UserID:             input.UserID,
 		DeviceID:           input.DeviceID,
-		MoisturePercent:    input.MoisturePercent,
-		LightLux:           input.LightLux,
-		TemperatureCelsius: input.TemperatureCelsius,
+		MoisturePercent:    sanitizedMoisture,
+		LightLux:           sanitizedLight,
+		TemperatureCelsius: sanitizedTemperature,
 		RecordedAt:         recordedAt,
-		SensorStatus:       sensorStatusFor(recordedAt, time.Now().UTC()),
+		SensorStatus:       status,
 		RawPayload: map[string]any{
 			"device_id":           input.DeviceID,
 			"recorded_at":         recordedAt.Format(time.RFC3339),
 			"moisture_percent":    input.MoisturePercent,
 			"light_lux":           input.LightLux,
 			"temperature_celsius": input.TemperatureCelsius,
+			"sensor_issues":       issues,
 		},
 	})
 	if err != nil {
@@ -295,6 +293,10 @@ func shouldTriggerWateringEvent(previous *models.SensorData, current *models.Sen
 		return false
 	}
 
+	if previous.SensorStatus != sensorStatusNormal || current.SensorStatus != sensorStatusNormal {
+		return false
+	}
+
 	if current.RecordedAt.Before(previous.RecordedAt) {
 		return false
 	}
@@ -303,12 +305,51 @@ func shouldTriggerWateringEvent(previous *models.SensorData, current *models.Sen
 		(current.MoisturePercent-previous.MoisturePercent) >= moistureRiseThreshold
 }
 
-func sensorStatusFor(recordedAt time.Time, now time.Time) string {
+func sensorStatusFor(recordedAt time.Time, now time.Time, hasInvalidReading bool) string {
+	if hasInvalidReading {
+		return sensorStatusInvalid
+	}
+
 	if now.Sub(recordedAt) > sensorStaleThreshold {
 		return sensorStatusStale
 	}
 
 	return sensorStatusNormal
+}
+
+func normalizeSensorReading(input IngestSensorInput, now time.Time) (string, float64, float64, float64, []string) {
+	issues := make([]string, 0, 3)
+
+	moisture := input.MoisturePercent
+	if moisture < 0 || moisture > 100 {
+		issues = append(issues, fmt.Sprintf("moisture_percent=%.2f", moisture))
+		moisture = clampFloat(moisture, 0, 100)
+	}
+
+	light := input.LightLux
+	if light < 0 {
+		issues = append(issues, fmt.Sprintf("light_lux=%.2f", light))
+		light = 0
+	}
+
+	temperature := input.TemperatureCelsius
+	if temperature < -50 || temperature > 100 {
+		issues = append(issues, fmt.Sprintf("temperature_celsius=%.2f", temperature))
+		temperature = clampFloat(temperature, -50, 100)
+	}
+
+	return sensorStatusFor(input.RecordedAt.UTC(), now, len(issues) > 0), moisture, light, temperature, issues
+}
+
+func clampFloat(value float64, min float64, max float64) float64 {
+	if value < min {
+		return min
+	}
+	if value > max {
+		return max
+	}
+
+	return value
 }
 
 func buildWateringSystemPrompt(profile *models.BonsaiProfile) string {
