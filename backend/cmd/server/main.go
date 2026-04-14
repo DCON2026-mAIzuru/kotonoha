@@ -41,6 +41,7 @@ func main() {
 	}
 
 	llmStreamer := llm.NewStreamer(cfg.GeminiAPIKey, cfg.GeminiModel)
+	llmEmbedder := llm.NewEmbedder(cfg.GeminiAPIKey, cfg.GeminiEmbeddingModel)
 	realtimeHub := realtime.NewHub()
 	pushSender := pushtransport.NewSender(cfg.VapidPublicKey, cfg.VapidPrivateKey, cfg.VapidSubject)
 
@@ -49,7 +50,7 @@ func main() {
 		HealthService:           service.NewHealthService(store),
 		ProfileService:          service.NewProfileService(store),
 		PushSubscriptionService: service.NewPushSubscriptionService(store),
-		ChatService:             service.NewChatService(llmStreamer),
+		ChatService:             service.NewChatService(store, llmStreamer, llmEmbedder),
 		SensorService:           service.NewSensorService(store, llmStreamer, realtimeHub, pushSender),
 		RealtimeHub:             realtimeHub,
 		JWTVerifier:             verifier,
