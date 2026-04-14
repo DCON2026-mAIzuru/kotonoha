@@ -1,0 +1,32 @@
+.DS_Store
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+coverage/
+
+# Go
+bin/
+dist/
+*.test
+
+# Supabase local state
+.supabase/
+supabase/.branches/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Editor
+.idea/
+.vscode/

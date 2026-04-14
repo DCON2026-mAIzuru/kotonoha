@@ -1,0 +1,64 @@
+package api
+
+import (
+	"time"
+
+	"github.com/apple/kotonoha/backend/internal/api/handlers"
+	"github.com/apple/kotonoha/backend/internal/api/middleware"
+	"github.com/apple/kotonoha/backend/internal/service"
+	pkgauth "github.com/apple/kotonoha/backend/pkg/auth"
+	"github.com/apple/kotonoha/backend/pkg/config"
+	"github.com/gin-contrib/cors"
+	"github.com/gin-gonic/gin"
+)
+
+type Dependencies struct {
+	Config                  *config.Config
+	HealthService           *service.HealthService
+	ProfileService          *service.ProfileService
+	PushSubscriptionService *service.PushSubscriptionService
+	JWTVerifier             *pkgauth.SupabaseJWTVerifier
+}
+
+func NewRouter(deps Dependencies) *gin.Engine {
+	engine := gin.New()
+	engine.Use(gin.Logger())
+	engine.Use(gin.Recovery())
+	engine.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{deps.Config.BackendAllowedOrigin},
+		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Authorization", "Content-Type", "X-Sensor-Token"},
+		ExposeHeaders:    []string{"Content-Length"},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
+
+	healthHandler := handlers.NewHealthHandler(deps.HealthService)
+	authHandler := handlers.NewAuthHandler()
+	profileHandler := handlers.NewProfileHandler(deps.ProfileService)
+	pushSubscriptionHandler := handlers.NewPushSubscriptionHandler(deps.PushSubscriptionService)
+	authMiddleware := middleware.RequireAuth(deps.JWTVerifier)
+
+	engine.GET("/healthz", healthHandler.Liveness)
+	engine.GET("/readyz", healthHandler.Readiness)
+
+	apiV1 := engine.Group("/api/v1")
+	{
+		authRoutes := apiV1.Group("/auth")
+		authRoutes.Use(authMiddleware)
+		authRoutes.GET("/me", authHandler.Me)
+
+		profileRoutes := apiV1.Group("/profile")
+		profileRoutes.Use(authMiddleware)
+		profileRoutes.GET("", profileHandler.Get)
+		profileRoutes.PUT("", profileHandler.Upsert)
+
+		pushRoutes := apiV1.Group("/push")
+		pushRoutes.Use(authMiddleware)
+		pushRoutes.GET("/subscriptions", pushSubscriptionHandler.List)
+		pushRoutes.POST("/subscribe", pushSubscriptionHandler.Upsert)
+		pushRoutes.DELETE("/subscriptions/:id", pushSubscriptionHandler.Delete)
+	}
+
+	return engine
+}
