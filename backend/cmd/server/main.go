@@ -11,8 +11,11 @@ import (
 	"time"
 
 	"github.com/apple/kotonoha/backend/internal/api"
+	"github.com/apple/kotonoha/backend/internal/llm"
+	"github.com/apple/kotonoha/backend/internal/realtime"
 	"github.com/apple/kotonoha/backend/internal/repository"
 	"github.com/apple/kotonoha/backend/internal/service"
+	pushtransport "github.com/apple/kotonoha/backend/internal/webpush"
 	pkgauth "github.com/apple/kotonoha/backend/pkg/auth"
 	"github.com/apple/kotonoha/backend/pkg/config"
 )
@@ -37,11 +40,18 @@ func main() {
 		log.Fatalf("JWT検証器の初期化に失敗しました: %v", err)
 	}
 
+	llmStreamer := llm.NewStreamer(cfg.GeminiAPIKey, cfg.GeminiModel)
+	realtimeHub := realtime.NewHub()
+	pushSender := pushtransport.NewSender(cfg.VapidPublicKey, cfg.VapidPrivateKey, cfg.VapidSubject)
+
 	deps := api.Dependencies{
 		Config:                  cfg,
 		HealthService:           service.NewHealthService(store),
 		ProfileService:          service.NewProfileService(store),
 		PushSubscriptionService: service.NewPushSubscriptionService(store),
+		ChatService:             service.NewChatService(llmStreamer),
+		SensorService:           service.NewSensorService(store, llmStreamer, realtimeHub, pushSender),
+		RealtimeHub:             realtimeHub,
 		JWTVerifier:             verifier,
 	}
 
