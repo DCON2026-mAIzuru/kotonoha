@@ -38,7 +38,7 @@ func Load() (*Config, error) {
 		SensorSharedToken:      os.Getenv("SENSOR_SHARED_TOKEN"),
 		GeminiAPIKey:           os.Getenv("GEMINI_API_KEY"),
 		GeminiModel:            getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
-		GeminiEmbeddingModel:   getEnv("GEMINI_EMBEDDING_MODEL", "text-embedding-004"),
+		GeminiEmbeddingModel:   getEnv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001"),
 		VapidPublicKey:         os.Getenv("VAPID_PUBLIC_KEY"),
 		VapidPrivateKey:        os.Getenv("VAPID_PRIVATE_KEY"),
 		VapidSubject:           os.Getenv("VAPID_SUBJECT"),

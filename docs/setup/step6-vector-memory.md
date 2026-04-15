@@ -62,6 +62,10 @@
 
 - `bonsai_memories` 保存は通常チャットの完了後に実行される
 - 長期記憶保存に失敗しても、チャット自体は完了させる方針
+- 現在の既定埋め込みモデル `gemini-embedding-001` は 3072 次元ベクトルを返す
+  - `bonsai_memories.embedding` も `vector(3072)` である必要がある
+  - 以前の `vector(768)` スキーマを使っている環境は `supabase/migrations/20260415231000_migrate_bonsai_embedding_to_3072.sql` を適用する
+  - `vector(3072)` では pgvector の `ivfflat` 制約により近似インデックスを作成できないため、現状は逐次走査で類似検索する
 - 類似検索は Supabase の `match_bonsai_memories` SQL 関数ではなく、バックエンドからの直接 SQL で実行している
   - 現在のバックエンド接続では `auth.uid()` ベースの SQL 関数をそのまま使いにくいため
 - プロフィール、現在センサー状態、検索結果をまとめてプロンプトへ入れるのは Step 7 の範囲
@@ -74,4 +78,3 @@
 4. `chat_history` に `user` と `assistant` が保存されることを確認
 5. `bonsai_memories` に1往復単位のレコードが増えることを確認
 6. 必要なら `ChatService.SearchRelevantMemories` を Step 7 で呼び出し、関連会話が返ることを確認
-

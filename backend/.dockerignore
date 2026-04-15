@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+tmp
+coverage.out
+*.log
+
+docs
+hardware
+frontend
+supabase

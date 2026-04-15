@@ -29,7 +29,7 @@ func NewEmbedder(geminiAPIKey string, geminiModel string) Embedder {
 
 	model := strings.TrimSpace(geminiModel)
 	if model == "" {
-		model = "text-embedding-004"
+		model = "gemini-embedding-001"
 	}
 
 	return NewGeminiEmbedder(geminiAPIKey, model, nil)

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="Kotonoha icon">
+  <rect width="512" height="512" rx="80" fill="#000000" />
+  <circle cx="256" cy="182" r="92" fill="#00b900" opacity="0.88" />
+  <path d="M139 338c36-58 78-82 117-82 38 0 80 24 117 82" fill="none" stroke="#ffffff" stroke-width="32" stroke-linecap="round" />
+  <text x="256" y="430" fill="#ffffff" font-size="66" font-family="Hiragino Sans, Meiryo, sans-serif" text-anchor="middle">言ノ葉</text>
+</svg>

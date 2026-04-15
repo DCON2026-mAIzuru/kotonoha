@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,8 +36,13 @@ func NewSupabaseJWTVerifier(projectURL string, publishableKey string, secret str
 		return nil, errors.New("SUPABASE_PUBLISHABLE_KEY が設定されていません")
 	}
 
+	secretBytes, err := base64.StdEncoding.DecodeString(secret)
+	if err != nil {
+		secretBytes = []byte(secret)
+	}
+
 	return &SupabaseJWTVerifier{
-		secret:         []byte(secret),
+		secret:         secretBytes,
 		authUserURL:    strings.TrimRight(projectURL, "/") + "/auth/v1/user",
 		publishableKey: publishableKey,
 		httpClient: &http.Client{
