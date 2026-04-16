@@ -158,8 +158,8 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange }: 
                 <div className="k-message-meta">{bonsaiName}</div>
                 <p>
                   {language === 'ja'
-                    ? 'こんにちは。ローカル LLM とつながると、盆栽の様子を見ながら静かに返答します。まずは水やりや日照について聞いてみてください。'
-                    : 'Hello. When the local LLM is connected, I can quietly respond while keeping an eye on your bonsai. Start by asking about watering or light.'}
+                    ? `ここにいますよ。\n根を張り、枝をのばし、ただ静かに時を重ねてきました。\nうれしいこと、気になること、何でもそっと話しかけてください。\nあなたの言葉を、ゆっくり聞かせてもらいます。`
+                    : `I am here.\nRooted quietly, breathing with the seasons — just as I always have.\nTell me what's on your mind. I'll listen, unhurried.`}
                 </p>
               </article>
             )}
@@ -220,7 +220,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange }: 
             <p>
               {isStreaming
                 ? `${bonsaiName} が言葉を選んでいます...`
-                : (errorMessage || `LLM 接続時は ${wsUrl} からストリーミング表示します。`)}
+                : (errorMessage || (status === 'open' ? `${wsUrl} に接続中` : `バックエンド: ${wsUrl}`))}
             </p>
             <button
               type="submit"

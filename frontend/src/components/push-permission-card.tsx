@@ -15,6 +15,7 @@ export function PushPermissionCard({ token }: PushPermissionCardProps) {
   const [permission, setPermission] = useState<NotificationPermission>('default');
   const [loading, setLoading] = useState(false);
   const [statusText, setStatusText] = useState('');
+  const [isError, setIsError] = useState(false);
 
   useEffect(() => {
     setSupported(isPushAvailable());
@@ -23,26 +24,21 @@ export function PushPermissionCard({ token }: PushPermissionCardProps) {
     }
   }, []);
 
-  const canEnable = useMemo(() => {
-    return supported && !!vapidPublicKey && permission !== 'denied';
-  }, [permission, supported, vapidPublicKey]);
+  const canEnable = useMemo(
+    () => supported && !!vapidPublicKey && permission !== 'denied',
+    [permission, supported, vapidPublicKey],
+  );
 
   const enablePush = async () => {
-    if (!canEnable) {
-      return;
-    }
-
+    if (!canEnable) return;
     setLoading(true);
     setStatusText('');
-
+    setIsError(false);
     try {
       const registration = await navigator.serviceWorker.register('/sw.js');
       const result = await Notification.requestPermission();
       setPermission(result);
-
-      if (result !== 'granted') {
-        throw new Error('通知許可が拒否されました');
-      }
+      if (result !== 'granted') throw new Error('通知許可が拒否されました');
 
       const existing = await registration.pushManager.getSubscription();
       const subscription =
@@ -53,42 +49,51 @@ export function PushPermissionCard({ token }: PushPermissionCardProps) {
         }));
 
       const serialized = subscription.toJSON() as Record<string, unknown> & { endpoint?: string };
-      const endpoint = serialized.endpoint || subscription.endpoint;
-
-      await upsertPushSubscription(token, endpoint, serialized);
+      await upsertPushSubscription(token, serialized.endpoint || subscription.endpoint, serialized);
       setStatusText('Push通知を有効化しました');
     } catch (error) {
-      const text = error instanceof Error ? error.message : 'Push通知設定に失敗しました';
-      setStatusText(text);
+      setStatusText(error instanceof Error ? error.message : 'Push通知設定に失敗しました');
+      setIsError(true);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <section className="rounded-md border border-white/10 bg-surface-card/90 p-4">
-      <h3 className="text-base font-bold text-white">Push通知</h3>
-      <p className="mt-1 text-xs text-white/70">水やりイベントを検知したとき、盆栽から自発メッセージを受け取れます。</p>
+    <div className="k-push-card">
+      <h3>Push通知</h3>
+      <p>水やりイベントを検知したとき、盆栽から自発メッセージを受け取れます。</p>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/70">
-        <span>ブラウザ対応: {supported ? '対応' : '非対応'}</span>
-        <span>許可状態: {permission}</span>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
+        <span className="k-mini-badge" style={{ fontSize: '0.72rem' }}>
+          ブラウザ対応: {supported ? '対応' : '非対応'}
+        </span>
+        <span className="k-mini-badge" style={{ fontSize: '0.72rem' }}>
+          許可: {permission}
+        </span>
       </div>
 
-      {!vapidPublicKey && <p className="mt-2 text-xs text-orange-300">NEXT_PUBLIC_VAPID_PUBLIC_KEY が未設定です</p>}
+      {!vapidPublicKey && (
+        <p className="k-message-err" style={{ marginBottom: 12 }}>
+          NEXT_PUBLIC_VAPID_PUBLIC_KEY が未設定です
+        </p>
+      )}
 
       <button
         type="button"
         disabled={!canEnable || loading}
-        onClick={() => {
-          void enablePush();
-        }}
-        className="mt-4 h-10 rounded bg-brand-green px-4 text-sm font-bold text-white transition hover:brightness-110 disabled:opacity-50"
+        className="k-btn-primary"
+        style={{ maxWidth: 200 }}
+        onClick={() => void enablePush()}
       >
-        通知を有効化する
+        {loading ? '設定中...' : '通知を有効化する'}
       </button>
 
-      {statusText && <p className="mt-2 text-xs text-white/80">{statusText}</p>}
-    </section>
+      {statusText && (
+        <p className={isError ? 'k-message-err' : 'k-message-ok'} style={{ marginTop: 10 }}>
+          {statusText}
+        </p>
+      )}
+    </div>
   );
 }

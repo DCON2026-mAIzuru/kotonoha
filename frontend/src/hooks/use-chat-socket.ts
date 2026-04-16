@@ -139,8 +139,9 @@ export function useChatSocket(token: string, enabled: boolean) {
       if (payload.type === 'error') {
         activeAssistantIdRef.current = null;
         activeEventIdRef.current = null;
+        // 空のプレースホルダーを除去してからエラーメッセージを追加
         setMessages((current) => [
-          ...current,
+          ...current.filter((m) => !(m.role === 'assistant' && m.text === '')),
           {
             id: createId('system'),
             role: 'system',
@@ -167,9 +168,17 @@ export function useChatSocket(token: string, enabled: boolean) {
       return false;
     }
 
-    activeAssistantIdRef.current = null;
+    // プレースホルダーを先に追加して isStreaming=true にする（LLM の応答待ちを即座にフィードバック）
+    const pendingId = createId('assistant');
+    activeAssistantIdRef.current = pendingId;
+    activeEventIdRef.current = null;
 
-    setMessages((current) => [...current, { id: createId('user'), role: 'user', text: trimmed }]);
+    setMessages((current) => [
+      ...current,
+      { id: createId('user'), role: 'user', text: trimmed },
+      { id: pendingId, role: 'assistant', text: '' },
+    ]);
+
     socket.send(
       JSON.stringify({
         type: 'message',

@@ -517,18 +517,67 @@ button { appearance: none; }
 }
 
 .k-auth-card {
+  position: relative;
   width: 100%;
   max-width: 420px;
-  padding: 32px;
+  padding: 36px 32px 32px;
   border: 1px solid var(--line);
   border-radius: 26px;
   background: var(--paper-strong);
   box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.k-auth-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(213, 181, 116, 0), rgba(213, 181, 116, 0.52), rgba(213, 181, 116, 0));
+  pointer-events: none;
+}
+
+.k-auth-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.k-auth-logo-icon {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #678f6e, #587f5c);
+  color: white;
+  flex-shrink: 0;
+}
+
+.k-auth-logo-icon svg { width: 20px; height: 20px; }
+
+.k-auth-logo-text {
+  display: grid;
+  gap: 1px;
+}
+
+.k-auth-logo-text span:first-child {
+  font-size: 0.72rem;
+  color: #a1937c;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.k-auth-logo-text span:last-child {
+  font-size: 1.1rem;
+  font-weight: 500;
+  letter-spacing: -0.02em;
 }
 
 .k-auth-card h1 {
-  margin: 0 0 6px;
-  font-size: 1.5rem;
+  margin: 0 0 4px;
+  font-size: 1.45rem;
   font-weight: 500;
   letter-spacing: -0.02em;
 }
@@ -536,8 +585,162 @@ button { appearance: none; }
 .k-auth-card > p {
   margin: 0 0 24px;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
+
+/* モードタブ */
+.k-auth-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: rgba(54, 43, 31, 0.05);
+  margin-bottom: 20px;
+}
+
+.k-auth-tab {
+  height: 38px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 400;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+
+.k-auth-tab-active {
+  background: #fff;
+  color: var(--text);
+  font-weight: 500;
+  box-shadow: 0 2px 8px rgba(54, 43, 31, 0.10);
+}
+
+/* 成功画面 */
+.k-auth-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 0 20px;
+}
+
+.k-auth-success-icon {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--green-soft);
+  color: var(--green);
+  margin-bottom: 4px;
+}
+
+.k-auth-success-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.k-auth-success-sub {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+/* エラーバナー */
+.k-auth-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(192, 87, 70, 0.06);
+  border: 1px solid rgba(192, 87, 70, 0.12);
+  color: #9b4b3e;
+  font-size: 0.82rem;
+  margin-bottom: 14px;
+}
+
+/* input with icons */
+.k-input-wrap {
+  position: relative;
+}
+
+.k-input-icon {
+  position: absolute;
+  left: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.k-input-eye {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: none;
+  border: 0;
+  padding: 4px;
+  color: var(--muted);
+  cursor: pointer;
+  line-height: 0;
+}
+
+.k-input-eye:hover { color: var(--text); }
+
+.k-input.k-input-icon-left { padding-left: 38px; }
+.k-input.k-input-icon-right { padding-right: 36px; }
+
+/* 区切り線（または） */
+.k-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 18px 0;
+}
+
+.k-auth-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+.k-auth-divider span {
+  color: var(--muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+/* Google ボタン */
+.k-btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 44px;
+  width: 100%;
+  border: 1px solid rgba(54, 43, 31, 0.12);
+  border-radius: 999px;
+  background: #fff;
+  color: var(--text);
+  font-size: 0.9rem;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(54, 43, 31, 0.06);
+  transition: transform 160ms ease, box-shadow 160ms ease;
+}
+
+.k-btn-google:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(54, 43, 31, 0.10);
+}
+
+.k-btn-google:disabled { opacity: 0.58; cursor: not-allowed; }
 
 .k-field { margin-bottom: 16px; }
 
@@ -638,13 +841,24 @@ button { appearance: none; }
 }
 
 .k-profile-card {
+  position: relative;
   width: 100%;
   max-width: 560px;
-  padding: 32px;
+  padding: 36px 32px 32px;
   border: 1px solid var(--line);
   border-radius: 26px;
   background: var(--paper-strong);
   box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.k-profile-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  background: linear-gradient(90deg, rgba(213, 181, 116, 0), rgba(213, 181, 116, 0.52), rgba(213, 181, 116, 0));
+  pointer-events: none;
 }
 
 .k-profile-card h2 {
