@@ -67,7 +67,7 @@ create table if not exists public.bonsai_memories (
   user_id uuid not null references auth.users (id) on delete cascade,
   summary text not null,
   source_message_ids uuid[] not null default '{}',
-  embedding vector(768) not null,
+  embedding vector(3072) not null,
   created_at timestamptz not null default timezone('utc', now())
 );
 
@@ -82,10 +82,8 @@ create index if not exists idx_chat_history_user_id_created_at
 create index if not exists idx_bonsai_memories_user_id_created_at
   on public.bonsai_memories (user_id, created_at desc);
 
-create index if not exists idx_bonsai_memories_embedding
-  on public.bonsai_memories
-  using ivfflat (embedding vector_cosine_ops)
-  with (lists = 100);
+-- pgvector の ivfflat は vector 次元が 2000 以下でないと作成できないため、
+-- 3072 次元の埋め込み列には作成しない。
 
 create trigger set_bonsai_profiles_updated_at
 before update on public.bonsai_profiles
@@ -214,7 +212,7 @@ for delete
 using (auth.uid() = user_id);
 
 create or replace function public.match_bonsai_memories(
-  query_embedding vector(768),
+  query_embedding vector(3072),
   match_count integer default 3
 )
 returns table (

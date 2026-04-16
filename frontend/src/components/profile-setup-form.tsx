@@ -1,0 +1,78 @@
+'use client';
+
+import { FormEvent, useState } from 'react';
+import { upsertProfile } from '@/lib/backend-api';
+import type { BonsaiProfile } from '@/types/api';
+
+interface ProfileSetupFormProps {
+  token: string;
+  onSaved: (profile: BonsaiProfile) => void;
+}
+
+export function ProfileSetupForm({ token, onSaved }: ProfileSetupFormProps) {
+  const [name, setName] = useState('言ノ葉');
+  const [personality, setPersonality] = useState('静かで古風だけれど、親しい相手にはやわらかく話す');
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
+  const [isError, setIsError] = useState(false);
+
+  const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage('');
+    setIsError(false);
+    try {
+      const profile = await upsertProfile(token, { name, personality });
+      onSaved(profile);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'プロフィール保存に失敗しました');
+      setIsError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="k-profile-card">
+      <p className="k-eyebrow" style={{ margin: '0 0 6px' }}>はじめての設定</p>
+      <h2 style={{ margin: '0 0 4px', fontSize: '1.3rem', fontWeight: 500, letterSpacing: '-0.02em' }}>盆栽のプロフィール</h2>
+      <p style={{ margin: '0 0 24px', color: 'var(--muted)', fontSize: '0.86rem' }}>名前と口調を決めると、返信スタイルに反映されます。</p>
+
+      <form onSubmit={onSubmit}>
+        <div className="k-field">
+          <label htmlFor="profile-name">盆栽の名前</label>
+          <input
+            id="profile-name"
+            type="text"
+            required
+            maxLength={40}
+            className="k-input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+
+        <div className="k-field" style={{ marginBottom: 24 }}>
+          <label htmlFor="profile-personality">性格・口調</label>
+          <textarea
+            id="profile-personality"
+            required
+            maxLength={300}
+            rows={5}
+            className="k-textarea"
+            value={personality}
+            onChange={(e) => setPersonality(e.target.value)}
+          />
+        </div>
+
+        <button type="submit" disabled={loading} className="k-btn-primary">
+          {loading ? '保存中...' : '保存してチャットを開始'}
+        </button>
+      </form>
+
+      {message && (
+        <p className={isError ? 'k-message-err' : 'k-message-ok'}>{message}</p>
+      )}
+    </div>
+  );
+}

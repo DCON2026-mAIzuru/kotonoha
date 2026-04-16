@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-const fallbackEmbeddingDimension = 768
+const fallbackEmbeddingDimension = 3072
 
 type FallbackEmbedder struct{}
 

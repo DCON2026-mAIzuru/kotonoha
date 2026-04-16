@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
@@ -63,6 +64,7 @@ func (h *ChatHandler) Chat(c *gin.Context) {
 
 	conn, err := h.upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
+		log.Printf("WebSocketアップグレードに失敗しました: %v", err)
 		return
 	}
 	defer conn.Close()
