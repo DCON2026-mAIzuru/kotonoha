@@ -21,6 +21,39 @@ export function KotonohaApp() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   useEffect(() => {
+    if (!showMobileMenu) {
+      return;
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setShowMobileMenu(false);
+      }
+    };
+
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, [showMobileMenu]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(min-width: 981px)');
+    const onViewportChange = (event: MediaQueryListEvent) => {
+      if (event.matches) {
+        setShowMobileMenu(false);
+      }
+    };
+
+    mediaQuery.addEventListener('change', onViewportChange);
+    return () => mediaQuery.removeEventListener('change', onViewportChange);
+  }, []);
+
+  useEffect(() => {
     if (!auth.accessToken) {
       setProfile(null);
       return;
@@ -106,23 +139,25 @@ export function KotonohaApp() {
     );
   }
 
+  const closeMobileMenu = () => setShowMobileMenu(false);
+
   const openEditProfile = () => {
     setShowEditProfile(true);
     setShowPush(false);
-    setShowMobileMenu(false);
+    closeMobileMenu();
   };
 
   const openPushSettings = () => {
     setShowPush(true);
     setShowEditProfile(false);
-    setShowMobileMenu(false);
+    closeMobileMenu();
   };
 
   const closeEditProfile = () => setShowEditProfile(false);
   const closePushSettings = () => setShowPush(false);
 
   const signOut = async () => {
-    setShowMobileMenu(false);
+    closeMobileMenu();
     await auth.signOut();
   };
 
@@ -174,8 +209,9 @@ export function KotonohaApp() {
             type="button"
             className="k-mobile-menu-toggle"
             onClick={() => setShowMobileMenu((value) => !value)}
-            aria-label="メニューを開く"
+            aria-label={showMobileMenu ? 'メニューを閉じる' : 'メニューを開く'}
             aria-expanded={showMobileMenu}
+            aria-controls="mobile-menu"
           >
             <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
               <path
@@ -191,10 +227,36 @@ export function KotonohaApp() {
       </header>
 
       {showMobileMenu && (
-        <div className="k-mobile-menu-backdrop" onClick={() => setShowMobileMenu(false)}>
-          <div className="k-mobile-menu" onClick={(event) => event.stopPropagation()}>
+        <div className="k-mobile-menu-backdrop" onClick={closeMobileMenu}>
+          <div
+            id="mobile-menu"
+            className="k-mobile-menu"
+            role="dialog"
+            aria-modal="true"
+            aria-label="モバイルメニュー"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="k-mobile-menu-header">
+              <p className="k-mobile-menu-title">メニュー</p>
+              <button
+                type="button"
+                className="k-mobile-menu-close"
+                onClick={closeMobileMenu}
+                aria-label="メニューを閉じる"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                  <path
+                    d="M7 7l10 10M17 7 7 17"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="1.8"
+                  />
+                </svg>
+              </button>
+            </div>
             <div className="k-mobile-menu-actions">
-              <PwaInstallButton variant="menu" />
+              <PwaInstallButton variant="menu" onPress={closeMobileMenu} />
               <button type="button" className="k-mobile-menu-item" onClick={openEditProfile}>
                 プロフィール編集
               </button>

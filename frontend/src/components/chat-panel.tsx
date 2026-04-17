@@ -168,18 +168,28 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange }: 
               const isUser   = message.role === 'user';
               const isEvent  = message.role === 'event';
               const isSystem = message.role === 'system';
+              const isPendingAssistant = message.role === 'assistant' && message.text === '';
 
               let cls = 'k-message k-message-assistant';
               if (isUser)   cls = 'k-message k-message-user';
               if (isEvent)  cls = 'k-message k-message-event';
               if (isSystem) cls = 'k-message k-message-system';
+              if (isPendingAssistant) cls += ' k-message-pending';
 
               return (
                 <article key={message.id} className={cls}>
                   <div className="k-message-meta">
                     {isUser ? 'あなた' : bonsaiName}
                   </div>
-                  <p>{message.text || '...'}</p>
+                  {isPendingAssistant ? (
+                    <div className="k-typing-indicator" aria-label={`${bonsaiName} が返答を準備中`}>
+                      <span />
+                      <span />
+                      <span />
+                    </div>
+                  ) : (
+                    <p>{message.text}</p>
+                  )}
                 </article>
               );
             })}

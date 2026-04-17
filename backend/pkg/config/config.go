@@ -18,6 +18,7 @@ type Config struct {
 	SensorSharedToken      string
 	GeminiAPIKey           string
 	GeminiModel            string
+	GeminiModelPriority    string
 	GeminiEmbeddingModel   string
 	VapidPublicKey         string
 	VapidPrivateKey        string
@@ -38,6 +39,7 @@ func Load() (*Config, error) {
 		SensorSharedToken:      os.Getenv("SENSOR_SHARED_TOKEN"),
 		GeminiAPIKey:           os.Getenv("GEMINI_API_KEY"),
 		GeminiModel:            getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
+		GeminiModelPriority:    os.Getenv("GEMINI_MODEL_PRIORITY"),
 		GeminiEmbeddingModel:   getEnv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001"),
 		VapidPublicKey:         os.Getenv("VAPID_PUBLIC_KEY"),
 		VapidPrivateKey:        os.Getenv("VAPID_PRIVATE_KEY"),

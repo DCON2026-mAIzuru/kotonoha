@@ -27,9 +27,10 @@ function isIOSBrowser(): boolean {
 
 interface PwaInstallButtonProps {
   variant?: 'icon' | 'menu';
+  onPress?: () => void;
 }
 
-export function PwaInstallButton({ variant = 'icon' }: PwaInstallButtonProps) {
+export function PwaInstallButton({ variant = 'icon', onPress }: PwaInstallButtonProps) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
   const [isInstalling, setIsInstalling] = useState(false);
@@ -102,7 +103,10 @@ export function PwaInstallButton({ variant = 'icon' }: PwaInstallButtonProps) {
       <button
         type="button"
         className={buttonClassName}
-        onClick={() => void handleInstall()}
+        onClick={() => {
+          onPress?.();
+          void handleInstall();
+        }}
         aria-label="言ノ葉をホーム画面に追加"
         title={deferredPrompt ? '言ノ葉をホーム画面に追加' : 'PWAインストール方法を見る'}
       >

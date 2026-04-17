@@ -40,7 +40,7 @@ func main() {
 		log.Fatalf("JWT検証器の初期化に失敗しました: %v", err)
 	}
 
-	llmStreamer := llm.NewStreamer(cfg.GeminiAPIKey, cfg.GeminiModel)
+	llmStreamer := llm.NewStreamer(cfg.GeminiAPIKey, cfg.GeminiModel, cfg.GeminiModelPriority)
 	llmEmbedder := llm.NewEmbedder(cfg.GeminiAPIKey, cfg.GeminiEmbeddingModel)
 	realtimeHub := realtime.NewHub()
 	pushSender := pushtransport.NewSender(cfg.VapidPublicKey, cfg.VapidPrivateKey, cfg.VapidSubject)

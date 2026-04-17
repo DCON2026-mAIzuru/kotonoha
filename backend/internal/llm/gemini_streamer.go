@@ -14,6 +14,26 @@ import (
 	"time"
 )
 
+type GeminiAPIError struct {
+	StatusCode int
+	Status     string
+	Message    string
+	Body       string
+}
+
+func (e *GeminiAPIError) Error() string {
+	switch {
+	case e == nil:
+		return ""
+	case e.Status != "" && e.Message != "":
+		return fmt.Sprintf("Geminiがエラーを返しました: status=%d api_status=%s message=%s body=%s", e.StatusCode, e.Status, e.Message, e.Body)
+	case e.Message != "":
+		return fmt.Sprintf("Geminiがエラーを返しました: status=%d message=%s body=%s", e.StatusCode, e.Message, e.Body)
+	default:
+		return fmt.Sprintf("Geminiがエラーを返しました: status=%d body=%s", e.StatusCode, e.Body)
+	}
+}
+
 type GeminiStreamer struct {
 	apiKey     string
 	model      string
@@ -64,10 +84,35 @@ func (s *GeminiStreamer) StreamChat(ctx context.Context, req ChatRequest, onChun
 
 	if response.StatusCode != http.StatusOK {
 		raw, _ := io.ReadAll(io.LimitReader(response.Body, 2048))
-		return fmt.Errorf("Geminiがエラーを返しました: status=%d body=%s", response.StatusCode, strings.TrimSpace(string(raw)))
+		return buildGeminiAPIError(response.StatusCode, raw)
 	}
 
 	return s.scanSSE(response.Body, onChunk)
+}
+
+func buildGeminiAPIError(statusCode int, rawBody []byte) error {
+	body := strings.TrimSpace(string(rawBody))
+
+	var payload struct {
+		Error struct {
+			Code    int    `json:"code"`
+			Message string `json:"message"`
+			Status  string `json:"status"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rawBody, &payload); err != nil {
+		return &GeminiAPIError{
+			StatusCode: statusCode,
+			Body:       body,
+		}
+	}
+
+	return &GeminiAPIError{
+		StatusCode: statusCode,
+		Status:     strings.TrimSpace(payload.Error.Status),
+		Message:    strings.TrimSpace(payload.Error.Message),
+		Body:       body,
+	}
 }
 
 func (s *GeminiStreamer) buildEndpoint() (string, error) {
