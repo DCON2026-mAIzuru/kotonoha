@@ -19,8 +19,8 @@ self.addEventListener('push', (event) => {
   const title = payload.title || '言ノ葉からのお知らせ';
   const options = {
     body: payload.body || '盆栽からメッセージが届きました。',
-    icon: '/icon.svg',
-    badge: '/icon.svg',
+    icon: '/android-chrome-192x192.png',
+    badge: '/favicon-32x32.png',
     data: {
       url: payload.url || '/',
     },

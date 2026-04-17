@@ -1,4 +1,4 @@
-import type { BonsaiProfile, PushSubscriptionRecord, UpsertProfileInput } from '@/types/api';
+import type { BonsaiProfile, ChatHistoryEntry, PushSubscriptionRecord, UpsertProfileInput } from '@/types/api';
 
 const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
 
@@ -42,6 +42,11 @@ export async function upsertProfile(token: string, input: UpsertProfileInput): P
     body: JSON.stringify(input),
   });
   return payload.profile;
+}
+
+export async function getChatHistory(token: string, limit = 50): Promise<ChatHistoryEntry[]> {
+  const payload = await authFetch<{ history: ChatHistoryEntry[] }>(token, `/api/v1/chat/history?limit=${limit}`);
+  return payload.history ?? [];
 }
 
 export async function upsertPushSubscription(

@@ -66,6 +66,10 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		pushRoutes.POST("/subscribe", pushSubscriptionHandler.Upsert)
 		pushRoutes.DELETE("/subscriptions/:id", pushSubscriptionHandler.Delete)
 
+		chatRoutes := apiV1.Group("/chat")
+		chatRoutes.Use(authMiddleware)
+		chatRoutes.GET("/history", chatHandler.History)
+
 		apiV1.POST("/sensor", sensorHandler.Ingest)
 	}
 

@@ -55,6 +55,22 @@ func NewChatHandler(chatService *service.ChatService, realtimeHub *realtime.Hub,
 	}
 }
 
+func (h *ChatHandler) History(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "認証ユーザーが見つかりません"})
+		return
+	}
+
+	entries, err := h.chatService.ListHistory(c.Request.Context(), user.ID, 50)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"history": entries})
+}
+
 func (h *ChatHandler) Chat(c *gin.Context) {
 	user, ok := middleware.CurrentUser(c)
 	if !ok {
