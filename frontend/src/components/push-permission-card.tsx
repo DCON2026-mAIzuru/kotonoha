@@ -6,9 +6,10 @@ import { isPushAvailable, vapidKeyToUint8Array } from '@/lib/web-push';
 
 interface PushPermissionCardProps {
   token: string;
+  onClose?: () => void;
 }
 
-export function PushPermissionCard({ token }: PushPermissionCardProps) {
+export function PushPermissionCard({ token, onClose }: PushPermissionCardProps) {
   const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || '';
 
   const [supported, setSupported] = useState(false);
@@ -61,7 +62,12 @@ export function PushPermissionCard({ token }: PushPermissionCardProps) {
 
   return (
     <div className="k-push-card">
-      <h3>Push通知</h3>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+        <h3 style={{ margin: 0 }}>Push通知</h3>
+        {onClose && (
+          <button type="button" className="k-status-chip" onClick={onClose}>閉じる</button>
+        )}
+      </div>
       <p>水やりイベントを検知したとき、盆栽から自発メッセージを受け取れます。</p>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>

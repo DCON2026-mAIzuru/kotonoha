@@ -26,6 +26,14 @@ export interface ChatMessage {
   text: string;
 }
 
+export interface ChatHistoryEntry {
+  id: string;
+  user_id: string;
+  role: 'user' | 'assistant' | 'event' | 'system';
+  content: string;
+  created_at: string;
+}
+
 export interface RealtimeMessage {
   type: 'reply_chunk' | 'reply_done' | 'error';
   text?: string;

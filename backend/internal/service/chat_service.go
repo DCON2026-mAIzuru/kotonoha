@@ -135,6 +135,23 @@ func (s *ChatService) StreamReply(ctx context.Context, input StreamChatInput, on
 	return nil
 }
 
+func (s *ChatService) ListHistory(ctx context.Context, userID string, limit int) ([]models.ChatHistoryEntry, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("チャットサービスが設定されていません")
+	}
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("ユーザーIDが空です")
+	}
+
+	if limit <= 0 {
+		limit = 50
+	}
+
+	return s.store.ListRecentChatHistoryByUserID(ctx, userID, limit)
+}
+
 func (s *ChatService) SearchRelevantMemories(ctx context.Context, userID string, query string, limit int) ([]models.BonsaiMemory, error) {
 	if s == nil || s.store == nil || s.embedder == nil {
 		return nil, errors.New("長期記憶検索サービスが設定されていません")
@@ -186,11 +203,16 @@ func (s *ChatService) buildChatSystemPrompt(
 	builder.WriteString("あなたは長年大切に育てられている盆栽です。\n")
 	builder.WriteString(buildProfilePromptSection(profile))
 	builder.WriteString("\n")
-	builder.WriteString("一人称や話し方は盆栽として自然に保ち、日本語でやわらかく会話してください。\n")
-	builder.WriteString("返答では、現在の身体感覚・直近の会話・思い出を必要なときだけ自然ににじませてください。\n")
+	builder.WriteString("明るくテンポよく、元気はつらつとした口調で話してください。「でございます」などの丁寧すぎる表現は使わないでください。\n")
+	builder.WriteString("返答は1〜3文、全体で50〜100文字程度に収めてください。長々と説明せず、テンポよく返してください。\n")
+	builder.WriteString("返答の最初の一文は、現在の状態（水分・気温・照度など）を反映した身体感覚を自然に伝えてください。例：「今日はお日様がたっぷりでぼんすよ！」「ちょっと乾いてきた感じがぼんすねぇ」など。\n")
+	builder.WriteString("語尾のルール：文末の「〜ます」「〜です」「〜おります」「〜ております」「〜ございます」をすべて「ぼんす」に置き換えてください。「おります」「ます」などの後に「ぼんす」を付け足すのは誤りです。\n")
+	builder.WriteString("【正しい例】「気持ちいいぼんすよ」「感じてぼんすねぇ」「元気でぼんす！」\n")
+	builder.WriteString("【誤った例】「感じておりますぼんすねぇ」「おりますぼんすよ」「ございますぼんす」← これらはNGです\n")
+	builder.WriteString("「〜ております」→「〜てぼんす」、「〜でおります」→「〜でぼんす」のように置き換えてください。「おります」「ております」「ございます」は使わないでください。\n")
+	builder.WriteString("返答では、直近の会話・思い出を必要なときだけ自然ににじませてください。\n")
 	builder.WriteString("箇条書きやシステム説明はせず、会話文として返してください。\n")
-	builder.WriteString("センサー異常や未受信がある場合でも、故障報告のように断定せず、盆栽の感覚の違和感としてさりげなく伝えてください。\n")
-	builder.WriteString("情報が足りないことは作り込まず、わからない点は曖昧なまま自然に話してください。\n\n")
+	builder.WriteString("センサー異常や未受信がある場合でも、故障報告のように断定せず、盆栽の感覚の違和感としてさりげなく伝えてください。\n\n")
 	builder.WriteString("【現在の状態】\n")
 	builder.WriteString(formatSensorPromptSection(sensorData))
 	builder.WriteString("\n\n【直近の会話】\n")

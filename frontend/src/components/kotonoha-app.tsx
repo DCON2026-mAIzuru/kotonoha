@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AuthPanel } from '@/components/auth-panel';
 import { ChatPanel } from '@/components/chat-panel';
+import { PwaInstallButton } from '@/components/pwa-install-button';
 import { ProfileSetupForm } from '@/components/profile-setup-form';
 import { PushPermissionCard } from '@/components/push-permission-card';
 import { useAuth } from '@/hooks/use-auth';
@@ -16,6 +17,8 @@ export function KotonohaApp() {
   const [profileError, setProfileError] = useState('');
   const [llmOnline, setLlmOnline] = useState(false);
   const [showPush, setShowPush] = useState(false);
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
 
   useEffect(() => {
     if (!auth.accessToken) {
@@ -103,6 +106,26 @@ export function KotonohaApp() {
     );
   }
 
+  const openEditProfile = () => {
+    setShowEditProfile(true);
+    setShowPush(false);
+    setShowMobileMenu(false);
+  };
+
+  const openPushSettings = () => {
+    setShowPush(true);
+    setShowEditProfile(false);
+    setShowMobileMenu(false);
+  };
+
+  const closeEditProfile = () => setShowEditProfile(false);
+  const closePushSettings = () => setShowPush(false);
+
+  const signOut = async () => {
+    setShowMobileMenu(false);
+    await auth.signOut();
+  };
+
   /* ── Main chat view ── */
   return (
     <div className="k-shell">
@@ -123,26 +146,108 @@ export function KotonohaApp() {
           </span>
 
           <div className="k-status-meta">
+            <PwaInstallButton />
             <button
               type="button"
               className="k-status-chip"
-              onClick={() => setShowPush((v) => !v)}
+              onClick={openEditProfile}
+            >
+              プロフィール編集
+            </button>
+            <button
+              type="button"
+              className="k-status-chip"
+              onClick={openPushSettings}
             >
               通知設定
             </button>
             <button
               type="button"
               className="k-status-chip k-status-chip-green"
-              onClick={() => void auth.signOut()}
+              onClick={() => void signOut()}
             >
               ログアウト
             </button>
           </div>
+
+          <button
+            type="button"
+            className="k-mobile-menu-toggle"
+            onClick={() => setShowMobileMenu((value) => !value)}
+            aria-label="メニューを開く"
+            aria-expanded={showMobileMenu}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                d="M4 7h16M4 12h16M4 17h16"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="1.8"
+              />
+            </svg>
+          </button>
         </div>
       </header>
 
-      {/* Push card (toggled) */}
-      {showPush && <PushPermissionCard token={auth.accessToken} />}
+      {showMobileMenu && (
+        <div className="k-mobile-menu-backdrop" onClick={() => setShowMobileMenu(false)}>
+          <div className="k-mobile-menu" onClick={(event) => event.stopPropagation()}>
+            <div className="k-mobile-menu-actions">
+              <PwaInstallButton variant="menu" />
+              <button type="button" className="k-mobile-menu-item" onClick={openEditProfile}>
+                プロフィール編集
+              </button>
+              <button type="button" className="k-mobile-menu-item" onClick={openPushSettings}>
+                通知設定
+              </button>
+              <button type="button" className="k-mobile-menu-item k-mobile-menu-item-green" onClick={() => void signOut()}>
+                ログアウト
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile edit modal (toggled) */}
+      {showEditProfile && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(42, 41, 37, 0.46)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '24px 16px',
+          }}
+          onClick={closeEditProfile}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 560 }}>
+            <ProfileSetupForm
+              token={auth.accessToken}
+              initialName={profile.name}
+              initialPersonality={profile.personality}
+              onSaved={(updated) => { setProfile(updated); closeEditProfile(); }}
+              onCancel={closeEditProfile}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Push modal (toggled) */}
+      {showPush && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(42, 41, 37, 0.46)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '24px 16px',
+          }}
+          onClick={closePushSettings}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480 }}>
+            <PushPermissionCard token={auth.accessToken} onClose={closePushSettings} />
+          </div>
+        </div>
+      )}
 
       {/* Chat panel – takes the remaining height */}
       <main className="k-chat-layout">

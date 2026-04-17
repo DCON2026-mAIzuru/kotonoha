@@ -7,11 +7,14 @@ import type { BonsaiProfile } from '@/types/api';
 interface ProfileSetupFormProps {
   token: string;
   onSaved: (profile: BonsaiProfile) => void;
+  onCancel?: () => void;
+  initialName?: string;
+  initialPersonality?: string;
 }
 
-export function ProfileSetupForm({ token, onSaved }: ProfileSetupFormProps) {
-  const [name, setName] = useState('言ノ葉');
-  const [personality, setPersonality] = useState('静かで古風だけれど、親しい相手にはやわらかく話す');
+export function ProfileSetupForm({ token, onSaved, onCancel, initialName, initialPersonality }: ProfileSetupFormProps) {
+  const [name, setName] = useState(initialName ?? '言ノ葉');
+  const [personality, setPersonality] = useState(initialPersonality ?? '静かで古風だけれど、親しい相手にはやわらかく話す');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [isError, setIsError] = useState(false);
@@ -34,7 +37,7 @@ export function ProfileSetupForm({ token, onSaved }: ProfileSetupFormProps) {
 
   return (
     <div className="k-profile-card">
-      <p className="k-eyebrow" style={{ margin: '0 0 6px' }}>はじめての設定</p>
+      <p className="k-eyebrow" style={{ margin: '0 0 6px' }}>{onCancel ? 'プロフィール編集' : 'はじめての設定'}</p>
       <h2 style={{ margin: '0 0 4px', fontSize: '1.3rem', fontWeight: 500, letterSpacing: '-0.02em' }}>盆栽のプロフィール</h2>
       <p style={{ margin: '0 0 24px', color: 'var(--muted)', fontSize: '0.86rem' }}>名前と口調を決めると、返信スタイルに反映されます。</p>
 
@@ -65,9 +68,16 @@ export function ProfileSetupForm({ token, onSaved }: ProfileSetupFormProps) {
           />
         </div>
 
-        <button type="submit" disabled={loading} className="k-btn-primary">
-          {loading ? '保存中...' : '保存してチャットを開始'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="submit" disabled={loading} className="k-btn-primary">
+            {loading ? '保存中...' : (onCancel ? '保存する' : '保存してチャットを開始')}
+          </button>
+          {onCancel && (
+            <button type="button" disabled={loading} className="k-status-chip" onClick={onCancel}>
+              キャンセル
+            </button>
+          )}
+        </div>
       </form>
 
       {message && (

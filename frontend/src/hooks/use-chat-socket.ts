@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, RealtimeMessage } from '@/types/api';
+import { getChatHistory } from '@/lib/backend-api';
 import { resolveWebSocketUrl } from '@/lib/ws-url';
 
 const defaultWsUrl = process.env.NEXT_PUBLIC_WS_URL || '';
@@ -34,6 +35,7 @@ export function useChatSocket(token: string, enabled: boolean) {
   const socketRef = useRef<WebSocket | null>(null);
   const activeAssistantIdRef = useRef<string | null>(null);
   const activeEventIdRef = useRef<string | null>(null);
+  const historyLoadedRef = useRef(false);
 
   const appendChunk = useCallback((role: 'assistant' | 'event', chunk: string) => {
     const activeIdRef = role === 'assistant' ? activeAssistantIdRef : activeEventIdRef;
@@ -151,6 +153,22 @@ export function useChatSocket(token: string, enabled: boolean) {
       }
     };
   }, [apiBaseUrl, appendChunk, enabled, token, wsUrl]);
+
+  useEffect(() => {
+    if (!enabled || !token || historyLoadedRef.current) return;
+    historyLoadedRef.current = true;
+
+    getChatHistory(token).then((entries) => {
+      if (entries.length === 0) return;
+      setMessages(entries.map((entry) => ({
+        id: entry.id,
+        role: entry.role,
+        text: entry.content,
+      })));
+    }).catch(() => {
+      // 履歴取得失敗時は空のまま続行
+    });
+  }, [enabled, token]);
 
   useEffect(() => {
     connect();
