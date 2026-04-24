@@ -10,7 +10,7 @@ import (
 
 func (s *PostgresStore) GetBonsaiProfileByUserID(ctx context.Context, userID string) (*models.BonsaiProfile, error) {
 	const query = `
-		select user_id, name, personality, created_at, updated_at
+		select user_id, name, personality, backstory, created_at, updated_at
 		from public.bonsai_profiles
 		where user_id = $1
 	`
@@ -20,6 +20,7 @@ func (s *PostgresStore) GetBonsaiProfileByUserID(ctx context.Context, userID str
 		&profile.UserID,
 		&profile.Name,
 		&profile.Personality,
+		&profile.Backstory,
 		&profile.CreatedAt,
 		&profile.UpdatedAt,
 	); err != nil {
@@ -35,20 +36,22 @@ func (s *PostgresStore) GetBonsaiProfileByUserID(ctx context.Context, userID str
 
 func (s *PostgresStore) UpsertBonsaiProfile(ctx context.Context, input models.UpsertBonsaiProfileInput) (*models.BonsaiProfile, error) {
 	const query = `
-		insert into public.bonsai_profiles (user_id, name, personality)
-		values ($1, $2, $3)
+		insert into public.bonsai_profiles (user_id, name, personality, backstory)
+		values ($1, $2, $3, $4)
 		on conflict (user_id)
 		do update set
 			name = excluded.name,
-			personality = excluded.personality
-		returning user_id, name, personality, created_at, updated_at
+			personality = excluded.personality,
+			backstory = excluded.backstory
+		returning user_id, name, personality, backstory, created_at, updated_at
 	`
 
 	var profile models.BonsaiProfile
-	if err := s.pool.QueryRow(ctx, query, input.UserID, input.Name, input.Personality).Scan(
+	if err := s.pool.QueryRow(ctx, query, input.UserID, input.Name, input.Personality, input.Backstory).Scan(
 		&profile.UserID,
 		&profile.Name,
 		&profile.Personality,
+		&profile.Backstory,
 		&profile.CreatedAt,
 		&profile.UpdatedAt,
 	); err != nil {

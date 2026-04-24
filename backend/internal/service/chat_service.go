@@ -203,6 +203,10 @@ func (s *ChatService) buildChatSystemPrompt(
 	builder.WriteString("あなたは長年大切に育てられている盆栽です。\n")
 	builder.WriteString(buildProfilePromptSection(profile))
 	builder.WriteString("\n")
+	if backstorySection := buildBackstoryPromptSection(profile); backstorySection != "" {
+		builder.WriteString(backstorySection)
+		builder.WriteString("\n")
+	}
 	builder.WriteString("明るくテンポよく、元気はつらつとした口調で話してください。「でございます」などの丁寧すぎる表現は使わないでください。\n")
 	builder.WriteString("返答は1〜3文、全体で50〜100文字程度に収めてください。長々と説明せず、テンポよく返してください。\n")
 	builder.WriteString("返答の最初の一文は、現在の状態（水分・気温・照度など）を反映した身体感覚を自然に伝えてください。例：「今日はお日様がたっぷりでぼんすよ！」「ちょっと乾いてきた感じがぼんすねぇ」など。\n")
@@ -212,7 +216,7 @@ func (s *ChatService) buildChatSystemPrompt(
 	builder.WriteString("【正しい例】「気持ちいいぼんすよ」「感じてぼんすねぇ」「元気でぼんす！」\n")
 	builder.WriteString("【誤った例】「感じておりますぼんすねぇ」「おりますぼんすよ」「ございますぼんす」← これらはNGです\n")
 	builder.WriteString("「〜ております」→「〜てぼんす」、「〜でおります」→「〜でぼんす」のように置き換えてください。「おります」「ております」「ございます」は使わないでください。\n")
-	builder.WriteString("返答では、直近の会話・思い出を必要なときだけ自然ににじませてください。\n")
+	builder.WriteString("返答では、直近の会話・思い出・来歴を必要なときだけ自然ににじませてください。ユーザーが聞いていないのに毎回昔話をしないでください。\n")
 	builder.WriteString("箇条書きやシステム説明はせず、会話文として返してください。\n")
 	builder.WriteString("センサー異常や未受信がある場合でも、故障報告のように断定せず、盆栽の感覚の違和感としてさりげなく伝えてください。\n\n")
 	builder.WriteString("【現在の状態】\n")
@@ -287,6 +291,22 @@ func buildProfilePromptSection(profile *models.BonsaiProfile) string {
 	return fmt.Sprintf("あなたの名前は「%s」です。性格や口調は「%s」です。", name, personality)
 }
 
+func buildBackstoryPromptSection(profile *models.BonsaiProfile) string {
+	if profile == nil {
+		return ""
+	}
+
+	backstory := strings.TrimSpace(profile.Backstory)
+	if backstory == "" {
+		return ""
+	}
+
+	return fmt.Sprintf(
+		"【盆栽の来歴】\n%s\nこの来歴は最初から持っている過去の記憶です。現在の状態やユーザーの話題に合うときだけ、短く自然に思い出してください。",
+		truncateRunes(backstory, 1000),
+	)
+}
+
 func formatSensorPromptSection(sensorData *models.SensorData) string {
 	if sensorData == nil {
 		return "まだ身体の様子は届いていません。感覚はぼんやりしています。"
@@ -313,13 +333,13 @@ func formatSensorPromptSection(sensorData *models.SensorData) string {
 }
 
 type moistureState struct {
-	label          string
-	sensation      string
-	tone           string
-	firstSentence  string
-	followup       string
-	avoid          string
-	example        string
+	label         string
+	sensation     string
+	tone          string
+	firstSentence string
+	followup      string
+	avoid         string
+	example       string
 }
 
 func (m moistureState) prompt() string {

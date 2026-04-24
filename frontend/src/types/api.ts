@@ -2,6 +2,7 @@ export interface BonsaiProfile {
   user_id: string;
   name: string;
   personality: string;
+  backstory: string;
   created_at: string;
   updated_at: string;
 }
@@ -9,6 +10,7 @@ export interface BonsaiProfile {
 export interface UpsertProfileInput {
   name: string;
   personality: string;
+  backstory: string;
 }
 
 export interface PushSubscriptionRecord {

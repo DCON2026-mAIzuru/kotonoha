@@ -307,6 +307,7 @@ export function KotonohaApp() {
               token={auth.accessToken}
               initialName={profile.name}
               initialPersonality={profile.personality}
+              initialBackstory={profile.backstory}
               onSaved={(updated) => { setProfile(updated); closeEditProfile(); }}
               onCancel={closeEditProfile}
             />

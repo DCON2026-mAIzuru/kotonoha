@@ -75,6 +75,7 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 			UserID:      "user-1",
 			Name:        "言の葉",
 			Personality: "古風なおじいちゃん",
+			Backstory:   "前の持ち主は朝に水をくれる人だった。昔は別の庭で育っていた。",
 		},
 		sensorData: &models.SensorData{
 			UserID:             "user-1",
@@ -114,6 +115,9 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 	for _, want := range []string{
 		"言の葉",
 		"古風なおじいちゃん",
+		"前の持ち主は朝に水をくれる人だった",
+		"昔は別の庭で育っていた",
+		"ユーザーが聞いていないのに毎回昔話をしないでください",
 		"朝の光が気持ちいいです。",
 		"お水をもらえて助かりました。",
 		"先週は日当たりのよい窓辺に移してくれた",
