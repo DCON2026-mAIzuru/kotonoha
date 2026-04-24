@@ -20,8 +20,8 @@
 // User settings
 // ------------------------------------------------------------------
 
-const char* WIFI_SSID = "Nothing Phone (2a)";
-const char* WIFI_PASSWORD = "mochiyuyuyu";
+const char* WIFI_SSID = "****";
+const char* WIFI_PASSWORD = "****";
 
 const char* BACKEND_URL = "https://kotonoha-backend.fly.dev/api/v1/sensor";
 const char* SENSOR_TOKEN = "kotonoha-3242c839f8363681a3e1bf9fe5a7497a407738b84546a18b";
