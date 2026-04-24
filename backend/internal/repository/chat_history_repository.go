@@ -44,18 +44,18 @@ func (s *PostgresStore) CreateChatHistoryEntry(ctx context.Context, input models
 	return &entry, nil
 }
 
-func (s *PostgresStore) GetLatestChatHistoryByRole(ctx context.Context, userID string, role string) (*models.ChatHistoryEntry, error) {
+func (s *PostgresStore) GetLatestChatHistoryEventByName(ctx context.Context, userID string, eventName string) (*models.ChatHistoryEntry, error) {
 	const query = `
 		select id, user_id, role, content, sensor_snapshot, created_at
 		from public.chat_history
-		where user_id = $1 and role = $2
+		where user_id = $1 and role = 'event' and sensor_snapshot->>'event' = $2
 		order by created_at desc
 		limit 1
 	`
 
 	var entry models.ChatHistoryEntry
 	var raw []byte
-	if err := s.pool.QueryRow(ctx, query, userID, role).Scan(
+	if err := s.pool.QueryRow(ctx, query, userID, eventName).Scan(
 		&entry.ID,
 		&entry.UserID,
 		&entry.Role,

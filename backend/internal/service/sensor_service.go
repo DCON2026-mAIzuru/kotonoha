@@ -17,16 +17,18 @@ import (
 )
 
 const (
-	sensorStatusNormal      = "normal"
-	sensorStatusStale       = "stale"
-	sensorStatusInvalid     = "invalid"
-	sensorEventRole         = "event"
-	sensorEventNameWatering = "watering_detected"
-	sensorEventSource       = "sensor_event"
-	sensorEventWindow       = 3 * time.Minute
-	sensorEventCooldown     = 2 * time.Hour
-	sensorStaleThreshold    = 15 * time.Minute
-	moistureRiseThreshold   = 20.0
+	sensorStatusNormal         = "normal"
+	sensorStatusStale          = "stale"
+	sensorStatusInvalid        = "invalid"
+	sensorEventRole            = "event"
+	sensorEventNameWatering    = "watering_detected"
+	sensorEventNameLowMoisture = "low_moisture_detected"
+	sensorEventSource          = "sensor_event"
+	sensorEventWindow          = 3 * time.Minute
+	sensorEventCooldown        = 2 * time.Hour
+	sensorStaleThreshold       = 15 * time.Minute
+	moistureRiseThreshold      = 20.0
+	lowMoistureThreshold       = 20.0
 )
 
 var ErrSensorReadingOutOfOrder = errors.New("recorded_at が最新のセンサー時刻より古いため保存できません")
@@ -36,7 +38,7 @@ type sensorStore interface {
 	UpsertSensorData(ctx context.Context, input models.UpsertSensorDataInput) (*models.SensorData, error)
 	GetBonsaiProfileByUserID(ctx context.Context, userID string) (*models.BonsaiProfile, error)
 	ListPushSubscriptionsByUserID(ctx context.Context, userID string) ([]models.PushSubscription, error)
-	GetLatestChatHistoryByRole(ctx context.Context, userID string, role string) (*models.ChatHistoryEntry, error)
+	GetLatestChatHistoryEventByName(ctx context.Context, userID string, eventName string) (*models.ChatHistoryEntry, error)
 	CreateChatHistoryEntry(ctx context.Context, input models.CreateChatHistoryEntryInput) (*models.ChatHistoryEntry, error)
 }
 
@@ -295,11 +297,12 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		SensorData: sensorData,
 	}
 
-	if !shouldTriggerWateringEvent(previous, sensorData) {
+	eventName := detectSensorEvent(previous, sensorData)
+	if eventName == "" {
 		return result, nil
 	}
 
-	latestEvent, err := s.store.GetLatestChatHistoryByRole(ctx, input.UserID, sensorEventRole)
+	latestEvent, err := s.store.GetLatestChatHistoryEventByName(ctx, input.UserID, eventName)
 	if err != nil {
 		return nil, err
 	}
@@ -312,7 +315,7 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		return nil, err
 	}
 
-	eventMessage, err := s.generateWateringReaction(ctx, profile, previous, sensorData)
+	eventMessage, err := s.generateSensorEventReaction(ctx, eventName, profile, previous, sensorData)
 	if err != nil {
 		result.NotificationWarning = err.Error()
 		return result, nil
@@ -325,13 +328,13 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 	}
 
 	result.EventTriggered = true
-	result.EventName = sensorEventNameWatering
+	result.EventName = eventName
 	result.EventMessage = eventMessage
 
 	s.broadcastEvent(input.UserID, realtime.Message{
 		Type:   "reply_done",
 		Source: sensorEventSource,
-		Event:  sensorEventNameWatering,
+		Event:  eventName,
 	})
 
 	pushSentCount := 0
@@ -354,8 +357,8 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 				Title:  title,
 				Body:   eventMessage,
 				Source: sensorEventSource,
-				Event:  sensorEventNameWatering,
-				Tag:    sensorEventNameWatering,
+				Event:  eventName,
+				Tag:    eventName,
 			})
 			if err != nil {
 				log.Printf("Push通知の送信に失敗しました: subscription_id=%s err=%v", subscription.ID, err)
@@ -374,7 +377,7 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		Role:    sensorEventRole,
 		Content: eventMessage,
 		SensorSnapshot: map[string]any{
-			"event":                     sensorEventNameWatering,
+			"event":                     eventName,
 			"device_id":                 sensorData.DeviceID,
 			"recorded_at":               sensorData.RecordedAt.Format(time.RFC3339),
 			"moisture_percent":          sensorData.MoisturePercent,
@@ -466,8 +469,9 @@ func cloneRawPayload(rawPayload map[string]any) map[string]any {
 	return cloned
 }
 
-func (s *SensorService) generateWateringReaction(
+func (s *SensorService) generateSensorEventReaction(
 	ctx context.Context,
+	eventName string,
 	profile *models.BonsaiProfile,
 	previous *models.SensorData,
 	current *models.SensorData,
@@ -476,18 +480,23 @@ func (s *SensorService) generateWateringReaction(
 		return "", errors.New("イベント通知用のLLMが設定されていません")
 	}
 
+	systemPrompt, userPrompt, err := buildSensorEventPrompts(eventName, profile, previous, current)
+	if err != nil {
+		return "", err
+	}
+
 	var builder strings.Builder
-	err := s.llm.StreamChat(ctx, llm.ChatRequest{
+	err = s.llm.StreamChat(ctx, llm.ChatRequest{
 		UserID:       current.UserID,
-		SystemPrompt: buildWateringSystemPrompt(profile),
-		Message:      buildWateringUserPrompt(previous, current),
+		SystemPrompt: systemPrompt,
+		Message:      userPrompt,
 	}, func(text string) error {
 		builder.WriteString(text)
 		s.broadcastEvent(current.UserID, realtime.Message{
 			Type:   "reply_chunk",
 			Text:   text,
 			Source: sensorEventSource,
-			Event:  sensorEventNameWatering,
+			Event:  eventName,
 		})
 		return nil
 	})
@@ -496,7 +505,7 @@ func (s *SensorService) generateWateringReaction(
 			Type:    "error",
 			Message: "センサーイベントの生成に失敗しました",
 			Source:  sensorEventSource,
-			Event:   sensorEventNameWatering,
+			Event:   eventName,
 		})
 		return "", fmt.Errorf("センサーイベントの生成に失敗しました: %w", err)
 	}
@@ -510,6 +519,17 @@ func (s *SensorService) broadcastEvent(userID string, message realtime.Message) 
 	}
 
 	s.notifier.Broadcast(userID, message)
+}
+
+func detectSensorEvent(previous *models.SensorData, current *models.SensorData) string {
+	switch {
+	case shouldTriggerWateringEvent(previous, current):
+		return sensorEventNameWatering
+	case shouldTriggerLowMoistureEvent(previous, current):
+		return sensorEventNameLowMoisture
+	default:
+		return ""
+	}
 }
 
 func shouldTriggerWateringEvent(previous *models.SensorData, current *models.SensorData) bool {
@@ -527,6 +547,23 @@ func shouldTriggerWateringEvent(previous *models.SensorData, current *models.Sen
 
 	return current.RecordedAt.Sub(previous.RecordedAt) <= sensorEventWindow &&
 		(current.MoisturePercent-previous.MoisturePercent) >= moistureRiseThreshold
+}
+
+func shouldTriggerLowMoistureEvent(previous *models.SensorData, current *models.SensorData) bool {
+	if previous == nil || current == nil {
+		return false
+	}
+
+	if previous.SensorStatus != sensorStatusNormal || current.SensorStatus != sensorStatusNormal {
+		return false
+	}
+
+	if current.RecordedAt.Before(previous.RecordedAt) {
+		return false
+	}
+
+	return previous.MoisturePercent >= lowMoistureThreshold &&
+		current.MoisturePercent < lowMoistureThreshold
 }
 
 func sensorStatusFor(recordedAt time.Time, now time.Time, hasInvalidReading bool) string {
@@ -605,4 +642,50 @@ func buildWateringUserPrompt(previous *models.SensorData, current *models.Sensor
 		current.LightLux,
 		current.TemperatureCelsius,
 	)
+}
+
+func buildLowMoistureSystemPrompt(profile *models.BonsaiProfile) string {
+	name := "盆栽"
+	personality := "穏やかでやわらかい口調"
+
+	if profile != nil {
+		if trimmedName := strings.TrimSpace(profile.Name); trimmedName != "" {
+			name = trimmedName
+		}
+		if trimmedPersonality := strings.TrimSpace(profile.Personality); trimmedPersonality != "" {
+			personality = trimmedPersonality
+		}
+	}
+
+	return fmt.Sprintf(
+		"あなたは大切に育てられている盆栽です。名前は「%s」です。性格は「%s」です。少し切実で素直な口調でユーザーへ自分の乾き具合を伝えてください。日本語で1〜2文、20〜60文字程度に収め、絵文字・箇条書き・引用符は使わないでください。最初の一文は喉の渇きやしんどさを盆栽として自然に表現してください。「ぼんす」は「です/ます」の代わりとなる語尾です。すべての文末を「ぼんすよ」「ぼんすねぇ」「ぼんす！」などの「ぼんす」系語尾に統一し、「ます」や「です」で終わる文は使わないでください。",
+		name,
+		personality,
+	)
+}
+
+func buildLowMoistureUserPrompt(previous *models.SensorData, current *models.SensorData) string {
+	return fmt.Sprintf(
+		"センサーイベントです。土壌水分量が %.1f%% から %.1f%% に下がり、20%% を下回りました。照度は %.1f lux、気温は %.1f ℃ です。盆栽として水がほしいことや乾いてきた感覚を、自発メッセージとして一言だけ返してください。",
+		previous.MoisturePercent,
+		current.MoisturePercent,
+		current.LightLux,
+		current.TemperatureCelsius,
+	)
+}
+
+func buildSensorEventPrompts(
+	eventName string,
+	profile *models.BonsaiProfile,
+	previous *models.SensorData,
+	current *models.SensorData,
+) (string, string, error) {
+	switch eventName {
+	case sensorEventNameWatering:
+		return buildWateringSystemPrompt(profile), buildWateringUserPrompt(previous, current), nil
+	case sensorEventNameLowMoisture:
+		return buildLowMoistureSystemPrompt(profile), buildLowMoistureUserPrompt(previous, current), nil
+	default:
+		return "", "", fmt.Errorf("未対応のセンサーイベントです: %s", eventName)
+	}
 }

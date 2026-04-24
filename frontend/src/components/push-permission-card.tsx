@@ -84,7 +84,7 @@ export function PushPermissionCard({ token, onClose }: PushPermissionCardProps) 
           <button type="button" className="k-status-chip" onClick={onClose}>閉じる</button>
         )}
       </div>
-      <p>水やりイベントを検知したとき、盆栽から自発メッセージを受け取れます。</p>
+      <p>水やりや乾燥を検知したとき、盆栽から自発メッセージを受け取れます。</p>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
         <span className="k-mini-badge" style={{ fontSize: '0.72rem' }}>
