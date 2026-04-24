@@ -1,0 +1,206 @@
+<svg width="1600" height="980" viewBox="0 0 1600 980" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1600" y2="980" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#F6F1E7"/>
+      <stop offset="1" stop-color="#E7EFE4"/>
+    </linearGradient>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop stop-color="#FFFDF8"/>
+      <stop offset="1" stop-color="#F7F4EC"/>
+    </linearGradient>
+    <linearGradient id="backendPanel" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#EAF5EC"/>
+      <stop offset="1" stop-color="#D7E9DA"/>
+    </linearGradient>
+    <linearGradient id="dbPanel" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#EDF3FA"/>
+      <stop offset="1" stop-color="#DCE7F5"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="16" flood-color="#54605A" flood-opacity="0.14"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#55736A"/>
+    </marker>
+    <marker id="arrowBlue" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#52739B"/>
+    </marker>
+    <style>
+      text {
+        font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+        fill: #23312C;
+      }
+      .title {
+        font-size: 34px;
+        font-weight: 700;
+      }
+      .subtitle {
+        font-size: 18px;
+        fill: #4B5D56;
+      }
+      .section {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .boxTitle {
+        font-size: 22px;
+        font-weight: 700;
+      }
+      .boxBody {
+        font-size: 16px;
+        fill: #42554E;
+      }
+      .label {
+        font-size: 15px;
+        font-weight: 700;
+      }
+      .small {
+        font-size: 14px;
+        fill: #556760;
+      }
+      .chip {
+        font-size: 14px;
+        font-weight: 700;
+      }
+    </style>
+  </defs>
+
+  <rect width="1600" height="980" rx="32" fill="url(#bg)"/>
+
+  <text x="84" y="78" class="title">Kotonoha システム構成図</text>
+  <text x="84" y="112" class="subtitle">ESP32 センサー入力、RAG による文脈生成、リアルタイム対話、Push 通知までを含む全体構成</text>
+
+  <rect x="70" y="150" width="1460" height="760" rx="28" fill="rgba(255,255,255,0.28)" stroke="#D5DED5"/>
+
+  <rect x="105" y="215" width="250" height="220" rx="24" fill="url(#panel)" stroke="#D4DED6" filter="url(#shadow)"/>
+  <text x="135" y="265" class="boxTitle">ユーザー</text>
+  <text x="135" y="302" class="boxBody">スマートフォン / PC から利用</text>
+  <text x="135" y="332" class="boxBody">会話、プロフィール設定、</text>
+  <text x="135" y="362" class="boxBody">通知確認、PWA 利用</text>
+  <rect x="135" y="385" width="118" height="34" rx="17" fill="#E8F0E6"/>
+  <text x="160" y="407" class="chip">UI / 操作</text>
+
+  <rect x="105" y="520" width="250" height="280" rx="24" fill="url(#panel)" stroke="#D4DED6" filter="url(#shadow)"/>
+  <text x="135" y="570" class="boxTitle">フロントエンド</text>
+  <text x="135" y="607" class="boxBody">Next.js / React / TypeScript</text>
+  <text x="135" y="637" class="boxBody">Supabase Auth</text>
+  <text x="135" y="667" class="boxBody">PWA + Service Worker</text>
+  <text x="135" y="697" class="boxBody">WebSocket ストリーミング表示</text>
+  <rect x="135" y="720" width="88" height="32" rx="16" fill="#F0E7D8"/>
+  <text x="162" y="741" class="chip">PWA</text>
+  <rect x="232" y="720" width="118" height="32" rx="16" fill="#E5EEF7"/>
+  <text x="254" y="741" class="chip">Web Push</text>
+
+  <rect x="445" y="185" width="690" height="650" rx="30" fill="url(#backendPanel)" stroke="#B9CEC0" filter="url(#shadow)"/>
+  <text x="480" y="235" class="section">バックエンド</text>
+  <text x="620" y="235" class="subtitle">Go / Gin / WebSocket / Fly.io</text>
+
+  <rect x="480" y="270" width="270" height="115" rx="22" fill="#FFFDF8" stroke="#C9D9CE"/>
+  <text x="510" y="315" class="boxTitle">REST API</text>
+  <text x="510" y="347" class="boxBody">認証、プロフィール、Push登録、</text>
+  <text x="510" y="375" class="boxBody">センサーデータ受信</text>
+
+  <rect x="795" y="270" width="300" height="115" rx="22" fill="#FFFDF8" stroke="#C9D9CE"/>
+  <text x="825" y="315" class="boxTitle">WebSocket</text>
+  <text x="825" y="347" class="boxBody">チャット応答のストリーミング</text>
+  <text x="825" y="375" class="boxBody">イベントの即時配信</text>
+
+  <rect x="480" y="430" width="270" height="150" rx="22" fill="#FFFDF8" stroke="#C9D9CE"/>
+  <text x="510" y="475" class="boxTitle">Chat Service</text>
+  <text x="510" y="507" class="boxBody">プロフィール・履歴・センサー状態を</text>
+  <text x="510" y="535" class="boxBody">統合して応答コンテキストを作成</text>
+  <text x="510" y="563" class="boxBody">会話履歴の保存と長期記憶化</text>
+
+  <rect x="795" y="430" width="300" height="150" rx="22" fill="#FFFDF8" stroke="#C9D9CE"/>
+  <text x="825" y="475" class="boxTitle">Sensor Service</text>
+  <text x="825" y="507" class="boxBody">最新センサー状態を保存</text>
+  <text x="825" y="535" class="boxBody">水やり・乾燥イベントを検知</text>
+  <text x="825" y="563" class="boxBody">通知トリガーを生成</text>
+
+  <rect x="480" y="625" width="270" height="160" rx="22" fill="#FFFDF8" stroke="#C9D9CE"/>
+  <text x="510" y="670" class="boxTitle">RAG / Prompt Builder</text>
+  <text x="510" y="702" class="boxBody">関連記憶検索</text>
+  <text x="510" y="730" class="boxBody">プロフィール・現在状態・履歴を反映</text>
+  <text x="510" y="758" class="boxBody">対話用プロンプトを動的生成</text>
+
+  <rect x="795" y="625" width="300" height="160" rx="22" fill="#FFFDF8" stroke="#C9D9CE"/>
+  <text x="825" y="670" class="boxTitle">Push Sender</text>
+  <text x="825" y="702" class="boxBody">VAPID を用いた Web Push 送信</text>
+  <text x="825" y="730" class="boxBody">イベント通知・デモ通知に対応</text>
+  <text x="825" y="758" class="boxBody">購読情報をもとに配信</text>
+
+  <rect x="1190" y="215" width="300" height="285" rx="24" fill="url(#dbPanel)" stroke="#C1D0E3" filter="url(#shadow)"/>
+  <text x="1225" y="265" class="section">Supabase</text>
+  <text x="1225" y="303" class="boxBody">Auth</text>
+  <text x="1225" y="333" class="boxBody">PostgreSQL</text>
+  <text x="1225" y="363" class="boxBody">pgvector</text>
+  <text x="1225" y="404" class="small">profiles / sensor_data /</text>
+  <text x="1225" y="430" class="small">chat_history / bonsai_memories /</text>
+  <text x="1225" y="456" class="small">push_subscriptions</text>
+
+  <rect x="1190" y="555" width="300" height="120" rx="24" fill="#FFF6EB" stroke="#E5CBA8" filter="url(#shadow)"/>
+  <text x="1225" y="605" class="boxTitle">Gemini API</text>
+  <text x="1225" y="637" class="boxBody">応答生成 / 埋め込み生成</text>
+
+  <rect x="1190" y="720" width="300" height="120" rx="24" fill="#FFF8F2" stroke="#DFCDBE" filter="url(#shadow)"/>
+  <text x="1225" y="770" class="boxTitle">Push Service</text>
+  <text x="1225" y="802" class="boxBody">ブラウザ / PWA へ通知配信</text>
+
+  <rect x="138" y="848" width="260" height="36" rx="18" fill="#E8EEE8"/>
+  <circle cx="163" cy="866" r="6" fill="#55736A"/>
+  <text x="180" y="871" class="label">主経路: センサー入力 → 文脈生成 → 応答 / 通知</text>
+
+  <line x1="355" y1="300" x2="445" y2="300" stroke="#55736A" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="372" y="286" class="label">操作</text>
+
+  <line x1="355" y1="655" x2="445" y2="655" stroke="#55736A" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="370" y="641" class="label">REST / WS</text>
+
+  <path d="M355 610 C405 610 410 330 445 330" stroke="#55736A" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+  <text x="360" y="470" class="label">Push購読</text>
+
+  <path d="M355 755 C420 755 420 748 445 748" stroke="#55736A" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+  <text x="366" y="740" class="label">通知受信面</text>
+
+  <line x1="750" y1="327" x2="795" y2="327" stroke="#55736A" stroke-width="4" marker-end="url(#arrow)"/>
+  <text x="753" y="315" class="label">双方向</text>
+
+  <line x1="615" y1="385" x2="615" y2="430" stroke="#55736A" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="945" y1="385" x2="945" y2="430" stroke="#55736A" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="615" y1="580" x2="615" y2="625" stroke="#55736A" stroke-width="4" marker-end="url(#arrow)"/>
+  <line x1="945" y1="580" x2="945" y2="625" stroke="#55736A" stroke-width="4" marker-end="url(#arrow)"/>
+
+  <path d="M750 505 C785 505 775 327 795 327" stroke="#55736A" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+  <text x="690" y="445" class="label">応答送信</text>
+
+  <path d="M945 430 C945 390 960 360 795 360" stroke="#55736A" stroke-width="4" fill="none" marker-end="url(#arrow)"/>
+  <text x="964" y="410" class="label">イベント配信</text>
+
+  <line x1="1135" y1="330" x2="1190" y2="330" stroke="#52739B" stroke-width="4" marker-end="url(#arrowBlue)"/>
+  <text x="1120" y="315" class="label">保存</text>
+
+  <path d="M750 675 C835 675 845 640 1190 640" stroke="#52739B" stroke-width="4" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="850" y="660" class="label">埋め込み / 応答生成</text>
+
+  <path d="M1095 505 C1145 505 1145 640 1190 640" stroke="#52739B" stroke-width="4" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="1118" y="562" class="label">通知文生成</text>
+
+  <path d="M1095 705 C1145 705 1145 780 1190 780" stroke="#52739B" stroke-width="4" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="1112" y="734" class="label">Push送信</text>
+
+  <path d="M1190 355 C1135 355 1135 690 750 690" stroke="#52739B" stroke-width="4" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="1030" y="708" class="label">関連記憶検索</text>
+
+  <path d="M1190 385 C1140 385 1120 470 750 470" stroke="#52739B" stroke-width="4" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="1038" y="448" class="label">プロフィール / 履歴 / 状態</text>
+
+  <path d="M1190 745 C1095 745 1080 745 1095 745" stroke="#52739B" stroke-width="4" fill="none"/>
+
+  <path d="M1190 780 C1035 780 1030 705 1095 705" stroke="#52739B" stroke-width="4" fill="none" marker-end="url(#arrowBlue)"/>
+  <text x="1035" y="760" class="label">購読情報</text>
+
+  <path d="M1190 305 C1160 305 1145 305 1135 305" stroke="#52739B" stroke-width="4" fill="none"/>
+
+  <rect x="84" y="924" width="430" height="26" rx="13" fill="#F2E7D9"/>
+  <text x="102" y="942" class="small">要点: センサー値と会話履歴を RAG で統合し、盆栽らしい返答と自発通知を実現</text>
+</svg>

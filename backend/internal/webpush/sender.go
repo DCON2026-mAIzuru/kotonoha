@@ -22,6 +22,7 @@ type Payload struct {
 }
 
 type Sender interface {
+	Enabled() bool
 	Send(ctx context.Context, subscription models.PushSubscription, payload Payload) error
 }
 
@@ -47,8 +48,16 @@ func NewSender(publicKey string, privateKey string, subject string) Sender {
 	}
 }
 
+func (noopSender) Enabled() bool {
+	return false
+}
+
 func (noopSender) Send(context.Context, models.PushSubscription, Payload) error {
 	return nil
+}
+
+func (s *vapidSender) Enabled() bool {
+	return s != nil && s.options != nil
 }
 
 func (s *vapidSender) Send(ctx context.Context, subscription models.PushSubscription, payload Payload) error {

@@ -79,3 +79,21 @@ func (h *PushSubscriptionHandler) Delete(c *gin.Context) {
 		"deleted": true,
 	})
 }
+
+func (h *PushSubscriptionHandler) SendDemo(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "認証ユーザーが見つかりません"})
+		return
+	}
+
+	result, err := h.pushSubscriptionService.SendDemo(c.Request.Context(), user.ID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"result": result,
+	})
+}

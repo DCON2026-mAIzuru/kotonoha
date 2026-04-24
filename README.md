@@ -14,7 +14,7 @@ ESP32 センサー値をコンテキストとして取り込み、LLM で「盆�
 - Supabase Auth（メール/パスワード、Google ログイン）
 - 盆栽プロフィール設定（名前・性格）
 - WebSocket ストリーミングチャット
-- センサー API 取り込みと水やりイベント検知
+- センサー API 取り込みと水やり・乾燥イベント検知
 - Web Push 通知（VAPID）
 - 会話ログ保存（短期）
 - 1往復単位のベクトル記憶（長期）
@@ -138,6 +138,7 @@ npm run dev
 
 - GET /api/v1/push/subscriptions
 - POST /api/v1/push/subscribe
+- POST /api/v1/push/demo
 - DELETE /api/v1/push/subscriptions/:id
 
 ### Sensor

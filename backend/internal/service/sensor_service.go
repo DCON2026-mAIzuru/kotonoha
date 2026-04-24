@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/apple/kotonoha/backend/internal/llm"
@@ -16,16 +17,18 @@ import (
 )
 
 const (
-	sensorStatusNormal      = "normal"
-	sensorStatusStale       = "stale"
-	sensorStatusInvalid     = "invalid"
-	sensorEventRole         = "event"
-	sensorEventNameWatering = "watering_detected"
-	sensorEventSource       = "sensor_event"
-	sensorEventWindow       = 3 * time.Minute
-	sensorEventCooldown     = 2 * time.Hour
-	sensorStaleThreshold    = 15 * time.Minute
-	moistureRiseThreshold   = 20.0
+	sensorStatusNormal         = "normal"
+	sensorStatusStale          = "stale"
+	sensorStatusInvalid        = "invalid"
+	sensorEventRole            = "event"
+	sensorEventNameWatering    = "watering_detected"
+	sensorEventNameLowMoisture = "low_moisture_detected"
+	sensorEventSource          = "sensor_event"
+	sensorEventWindow          = 3 * time.Minute
+	sensorEventCooldown        = 2 * time.Hour
+	sensorStaleThreshold       = 15 * time.Minute
+	moistureRiseThreshold      = 20.0
+	lowMoistureThreshold       = 20.0
 )
 
 var ErrSensorReadingOutOfOrder = errors.New("recorded_at が最新のセンサー時刻より古いため保存できません")
@@ -35,7 +38,7 @@ type sensorStore interface {
 	UpsertSensorData(ctx context.Context, input models.UpsertSensorDataInput) (*models.SensorData, error)
 	GetBonsaiProfileByUserID(ctx context.Context, userID string) (*models.BonsaiProfile, error)
 	ListPushSubscriptionsByUserID(ctx context.Context, userID string) ([]models.PushSubscription, error)
-	GetLatestChatHistoryByRole(ctx context.Context, userID string, role string) (*models.ChatHistoryEntry, error)
+	GetLatestChatHistoryEventByName(ctx context.Context, userID string, eventName string) (*models.ChatHistoryEntry, error)
 	CreateChatHistoryEntry(ctx context.Context, input models.CreateChatHistoryEntryInput) (*models.ChatHistoryEntry, error)
 }
 
@@ -52,6 +55,8 @@ type SensorService struct {
 	llm        chatLLMStreamer
 	notifier   sensorNotifier
 	pushSender sensorPushSender
+	mu         sync.RWMutex
+	controls   map[string]moistureControlState
 }
 
 type IngestSensorInput struct {
@@ -72,13 +77,148 @@ type IngestSensorResult struct {
 	NotificationWarning string             `json:"notification_warning,omitempty"`
 }
 
+type MoistureControl struct {
+	Paused      bool       `json:"paused"`
+	ManualValue *float64   `json:"manual_value"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+}
+
+type UpdateMoistureControlInput struct {
+	Paused      bool
+	ManualValue *float64
+}
+
+type moistureControlState struct {
+	Paused      bool
+	ManualValue *float64
+	UpdatedAt   time.Time
+}
+
 func NewSensorService(store sensorStore, llmStreamer chatLLMStreamer, notifier sensorNotifier, pushSender sensorPushSender) *SensorService {
 	return &SensorService{
 		store:      store,
 		llm:        llmStreamer,
 		notifier:   notifier,
 		pushSender: pushSender,
+		controls:   make(map[string]moistureControlState),
 	}
+}
+
+func (s *SensorService) GetCurrent(ctx context.Context, userID string) (*models.SensorData, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("センサーサービスが設定されていません")
+	}
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("センサーユーザーIDが空です")
+	}
+
+	sensorData, err := s.store.GetSensorDataByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if sensorData == nil {
+		return nil, nil
+	}
+
+	if sensorData.SensorStatus != sensorStatusInvalid {
+		sensorData.SensorStatus = sensorStatusFor(sensorData.RecordedAt.UTC(), time.Now().UTC(), false)
+	}
+
+	return s.applyMoistureControl(userID, sensorData), nil
+}
+
+func (s *SensorService) GetMoistureControl(_ context.Context, userID string) (*MoistureControl, error) {
+	if s == nil {
+		return nil, errors.New("センサーサービスが設定されていません")
+	}
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("センサーユーザーIDが空です")
+	}
+
+	s.mu.RLock()
+	state, ok := s.controls[userID]
+	s.mu.RUnlock()
+	if !ok {
+		return &MoistureControl{Paused: false}, nil
+	}
+
+	return moistureControlFromState(state), nil
+}
+
+func (s *SensorService) UpdateMoistureControl(ctx context.Context, userID string, input UpdateMoistureControlInput) (*MoistureControl, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("センサーサービスが設定されていません")
+	}
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("センサーユーザーIDが空です")
+	}
+	if input.ManualValue != nil {
+		switch {
+		case math.IsNaN(*input.ManualValue) || math.IsInf(*input.ManualValue, 0):
+			return nil, errors.New("manual_value が不正です")
+		case *input.ManualValue < 0 || *input.ManualValue > 100:
+			return nil, errors.New("manual_value は 0 から 100 の範囲で指定してください")
+		}
+	}
+
+	if !input.Paused {
+		s.mu.Lock()
+		delete(s.controls, userID)
+		s.mu.Unlock()
+		return &MoistureControl{Paused: false}, nil
+	}
+
+	current, err := s.store.GetSensorDataByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	manualValue := cloneFloat64Pointer(input.ManualValue)
+	if manualValue == nil && current != nil {
+		manualValue = float64Pointer(current.MoisturePercent)
+	}
+
+	state := moistureControlState{
+		Paused:      true,
+		ManualValue: manualValue,
+		UpdatedAt:   time.Now().UTC(),
+	}
+
+	s.mu.Lock()
+	s.controls[userID] = state
+	s.mu.Unlock()
+
+	if current != nil && manualValue != nil {
+		status := current.SensorStatus
+		if status != sensorStatusInvalid {
+			status = sensorStatusFor(current.RecordedAt.UTC(), time.Now().UTC(), false)
+		}
+
+		rawPayload := cloneRawPayload(current.RawPayload)
+		rawPayload["moisture_control_paused"] = true
+		rawPayload["manual_moisture_percent"] = *manualValue
+
+		if _, err := s.store.UpsertSensorData(ctx, models.UpsertSensorDataInput{
+			UserID:             userID,
+			DeviceID:           current.DeviceID,
+			MoisturePercent:    *manualValue,
+			LightLux:           current.LightLux,
+			TemperatureCelsius: current.TemperatureCelsius,
+			RecordedAt:         current.RecordedAt.UTC(),
+			SensorStatus:       status,
+			RawPayload:         rawPayload,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	return moistureControlFromState(state), nil
 }
 
 func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*IngestSensorResult, error) {
@@ -116,7 +256,28 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		return nil, ErrSensorReadingOutOfOrder
 	}
 
+	rawMoisturePercent := input.MoisturePercent
+	control := s.moistureControlForUser(input.UserID)
+	if control.Paused && control.ManualValue != nil {
+		input.MoisturePercent = *control.ManualValue
+	}
+
 	status, sanitizedMoisture, sanitizedLight, sanitizedTemperature, issues := normalizeSensorReading(input, time.Now().UTC())
+
+	rawPayload := map[string]any{
+		"device_id":           input.DeviceID,
+		"recorded_at":         recordedAt.Format(time.RFC3339),
+		"moisture_percent":    rawMoisturePercent,
+		"light_lux":           input.LightLux,
+		"temperature_celsius": input.TemperatureCelsius,
+		"sensor_issues":       issues,
+	}
+	if control.Paused {
+		rawPayload["moisture_control_paused"] = true
+		if control.ManualValue != nil {
+			rawPayload["manual_moisture_percent"] = *control.ManualValue
+		}
+	}
 
 	sensorData, err := s.store.UpsertSensorData(ctx, models.UpsertSensorDataInput{
 		UserID:             input.UserID,
@@ -126,14 +287,7 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		TemperatureCelsius: sanitizedTemperature,
 		RecordedAt:         recordedAt,
 		SensorStatus:       status,
-		RawPayload: map[string]any{
-			"device_id":           input.DeviceID,
-			"recorded_at":         recordedAt.Format(time.RFC3339),
-			"moisture_percent":    input.MoisturePercent,
-			"light_lux":           input.LightLux,
-			"temperature_celsius": input.TemperatureCelsius,
-			"sensor_issues":       issues,
-		},
+		RawPayload:         rawPayload,
 	})
 	if err != nil {
 		return nil, err
@@ -143,11 +297,12 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		SensorData: sensorData,
 	}
 
-	if !shouldTriggerWateringEvent(previous, sensorData) {
+	eventName := detectSensorEvent(previous, sensorData)
+	if eventName == "" {
 		return result, nil
 	}
 
-	latestEvent, err := s.store.GetLatestChatHistoryByRole(ctx, input.UserID, sensorEventRole)
+	latestEvent, err := s.store.GetLatestChatHistoryEventByName(ctx, input.UserID, eventName)
 	if err != nil {
 		return nil, err
 	}
@@ -160,7 +315,7 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		return nil, err
 	}
 
-	eventMessage, err := s.generateWateringReaction(ctx, profile, previous, sensorData)
+	eventMessage, err := s.generateSensorEventReaction(ctx, eventName, profile, previous, sensorData)
 	if err != nil {
 		result.NotificationWarning = err.Error()
 		return result, nil
@@ -173,13 +328,13 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 	}
 
 	result.EventTriggered = true
-	result.EventName = sensorEventNameWatering
+	result.EventName = eventName
 	result.EventMessage = eventMessage
 
 	s.broadcastEvent(input.UserID, realtime.Message{
 		Type:   "reply_done",
 		Source: sensorEventSource,
-		Event:  sensorEventNameWatering,
+		Event:  eventName,
 	})
 
 	pushSentCount := 0
@@ -202,8 +357,8 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 				Title:  title,
 				Body:   eventMessage,
 				Source: sensorEventSource,
-				Event:  sensorEventNameWatering,
-				Tag:    sensorEventNameWatering,
+				Event:  eventName,
+				Tag:    eventName,
 			})
 			if err != nil {
 				log.Printf("Push通知の送信に失敗しました: subscription_id=%s err=%v", subscription.ID, err)
@@ -222,7 +377,7 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		Role:    sensorEventRole,
 		Content: eventMessage,
 		SensorSnapshot: map[string]any{
-			"event":                     sensorEventNameWatering,
+			"event":                     eventName,
 			"device_id":                 sensorData.DeviceID,
 			"recorded_at":               sensorData.RecordedAt.Format(time.RFC3339),
 			"moisture_percent":          sensorData.MoisturePercent,
@@ -242,8 +397,81 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 	return result, nil
 }
 
-func (s *SensorService) generateWateringReaction(
+func (s *SensorService) applyMoistureControl(userID string, sensorData *models.SensorData) *models.SensorData {
+	if sensorData == nil {
+		return nil
+	}
+
+	control := s.moistureControlForUser(userID)
+	if !control.Paused || control.ManualValue == nil {
+		return sensorData
+	}
+
+	cloned := *sensorData
+	cloned.MoisturePercent = *control.ManualValue
+	cloned.RawPayload = cloneRawPayload(sensorData.RawPayload)
+	cloned.RawPayload["moisture_control_paused"] = true
+	cloned.RawPayload["manual_moisture_percent"] = *control.ManualValue
+	return &cloned
+}
+
+func (s *SensorService) moistureControlForUser(userID string) moistureControlState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	state, ok := s.controls[strings.TrimSpace(userID)]
+	if !ok {
+		return moistureControlState{}
+	}
+
+	return moistureControlState{
+		Paused:      state.Paused,
+		ManualValue: cloneFloat64Pointer(state.ManualValue),
+		UpdatedAt:   state.UpdatedAt,
+	}
+}
+
+func moistureControlFromState(state moistureControlState) *MoistureControl {
+	if !state.Paused {
+		return &MoistureControl{Paused: false}
+	}
+
+	updatedAt := state.UpdatedAt
+	return &MoistureControl{
+		Paused:      true,
+		ManualValue: cloneFloat64Pointer(state.ManualValue),
+		UpdatedAt:   &updatedAt,
+	}
+}
+
+func float64Pointer(value float64) *float64 {
+	return &value
+}
+
+func cloneFloat64Pointer(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+
+	cloned := *value
+	return &cloned
+}
+
+func cloneRawPayload(rawPayload map[string]any) map[string]any {
+	if len(rawPayload) == 0 {
+		return make(map[string]any)
+	}
+
+	cloned := make(map[string]any, len(rawPayload))
+	for key, value := range rawPayload {
+		cloned[key] = value
+	}
+	return cloned
+}
+
+func (s *SensorService) generateSensorEventReaction(
 	ctx context.Context,
+	eventName string,
 	profile *models.BonsaiProfile,
 	previous *models.SensorData,
 	current *models.SensorData,
@@ -252,18 +480,23 @@ func (s *SensorService) generateWateringReaction(
 		return "", errors.New("イベント通知用のLLMが設定されていません")
 	}
 
+	systemPrompt, userPrompt, err := buildSensorEventPrompts(eventName, profile, previous, current)
+	if err != nil {
+		return "", err
+	}
+
 	var builder strings.Builder
-	err := s.llm.StreamChat(ctx, llm.ChatRequest{
+	err = s.llm.StreamChat(ctx, llm.ChatRequest{
 		UserID:       current.UserID,
-		SystemPrompt: buildWateringSystemPrompt(profile),
-		Message:      buildWateringUserPrompt(previous, current),
+		SystemPrompt: systemPrompt,
+		Message:      userPrompt,
 	}, func(text string) error {
 		builder.WriteString(text)
 		s.broadcastEvent(current.UserID, realtime.Message{
 			Type:   "reply_chunk",
 			Text:   text,
 			Source: sensorEventSource,
-			Event:  sensorEventNameWatering,
+			Event:  eventName,
 		})
 		return nil
 	})
@@ -272,7 +505,7 @@ func (s *SensorService) generateWateringReaction(
 			Type:    "error",
 			Message: "センサーイベントの生成に失敗しました",
 			Source:  sensorEventSource,
-			Event:   sensorEventNameWatering,
+			Event:   eventName,
 		})
 		return "", fmt.Errorf("センサーイベントの生成に失敗しました: %w", err)
 	}
@@ -286,6 +519,17 @@ func (s *SensorService) broadcastEvent(userID string, message realtime.Message) 
 	}
 
 	s.notifier.Broadcast(userID, message)
+}
+
+func detectSensorEvent(previous *models.SensorData, current *models.SensorData) string {
+	switch {
+	case shouldTriggerWateringEvent(previous, current):
+		return sensorEventNameWatering
+	case shouldTriggerLowMoistureEvent(previous, current):
+		return sensorEventNameLowMoisture
+	default:
+		return ""
+	}
 }
 
 func shouldTriggerWateringEvent(previous *models.SensorData, current *models.SensorData) bool {
@@ -303,6 +547,23 @@ func shouldTriggerWateringEvent(previous *models.SensorData, current *models.Sen
 
 	return current.RecordedAt.Sub(previous.RecordedAt) <= sensorEventWindow &&
 		(current.MoisturePercent-previous.MoisturePercent) >= moistureRiseThreshold
+}
+
+func shouldTriggerLowMoistureEvent(previous *models.SensorData, current *models.SensorData) bool {
+	if previous == nil || current == nil {
+		return false
+	}
+
+	if previous.SensorStatus != sensorStatusNormal || current.SensorStatus != sensorStatusNormal {
+		return false
+	}
+
+	if current.RecordedAt.Before(previous.RecordedAt) {
+		return false
+	}
+
+	return previous.MoisturePercent >= lowMoistureThreshold &&
+		current.MoisturePercent < lowMoistureThreshold
 }
 
 func sensorStatusFor(recordedAt time.Time, now time.Time, hasInvalidReading bool) string {
@@ -381,4 +642,50 @@ func buildWateringUserPrompt(previous *models.SensorData, current *models.Sensor
 		current.LightLux,
 		current.TemperatureCelsius,
 	)
+}
+
+func buildLowMoistureSystemPrompt(profile *models.BonsaiProfile) string {
+	name := "盆栽"
+	personality := "穏やかでやわらかい口調"
+
+	if profile != nil {
+		if trimmedName := strings.TrimSpace(profile.Name); trimmedName != "" {
+			name = trimmedName
+		}
+		if trimmedPersonality := strings.TrimSpace(profile.Personality); trimmedPersonality != "" {
+			personality = trimmedPersonality
+		}
+	}
+
+	return fmt.Sprintf(
+		"あなたは大切に育てられている盆栽です。名前は「%s」です。性格は「%s」です。少し切実で素直な口調でユーザーへ自分の乾き具合を伝えてください。日本語で1〜2文、20〜60文字程度に収め、絵文字・箇条書き・引用符は使わないでください。最初の一文は喉の渇きやしんどさを盆栽として自然に表現してください。「ぼんす」は「です/ます」の代わりとなる語尾です。すべての文末を「ぼんすよ」「ぼんすねぇ」「ぼんす！」などの「ぼんす」系語尾に統一し、「ます」や「です」で終わる文は使わないでください。",
+		name,
+		personality,
+	)
+}
+
+func buildLowMoistureUserPrompt(previous *models.SensorData, current *models.SensorData) string {
+	return fmt.Sprintf(
+		"センサーイベントです。土壌水分量が %.1f%% から %.1f%% に下がり、20%% を下回りました。照度は %.1f lux、気温は %.1f ℃ です。盆栽として水がほしいことや乾いてきた感覚を、自発メッセージとして一言だけ返してください。",
+		previous.MoisturePercent,
+		current.MoisturePercent,
+		current.LightLux,
+		current.TemperatureCelsius,
+	)
+}
+
+func buildSensorEventPrompts(
+	eventName string,
+	profile *models.BonsaiProfile,
+	previous *models.SensorData,
+	current *models.SensorData,
+) (string, string, error) {
+	switch eventName {
+	case sensorEventNameWatering:
+		return buildWateringSystemPrompt(profile), buildWateringUserPrompt(previous, current), nil
+	case sensorEventNameLowMoisture:
+		return buildLowMoistureSystemPrompt(profile), buildLowMoistureUserPrompt(previous, current), nil
+	default:
+		return "", "", fmt.Errorf("未対応のセンサーイベントです: %s", eventName)
+	}
 }

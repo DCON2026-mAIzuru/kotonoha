@@ -1,6 +1,8 @@
 'use client';
 
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { getCurrentSensorData, getMoistureControl, updateMoistureControl } from '@/lib/backend-api';
+import type { MoistureControl, SensorData } from '@/types/api';
 import { useChatSocket } from '@/hooks/use-chat-socket';
 
 interface ChatPanelProps {
@@ -8,6 +10,7 @@ interface ChatPanelProps {
   bonsaiName: string;
   bonsaiSpecies?: string;
   onStatusChange?: (status: 'idle' | 'connecting' | 'open' | 'closed' | 'error') => void;
+  onSensorStateChange?: (state: 'loading' | 'connected' | 'stale' | 'invalid' | 'error' | 'none') => void;
 }
 
 const QUICK_PROMPTS = ['今日の様子を教えて', '水やりは必要？', '光は足りていそう？'] as const;
@@ -46,6 +49,24 @@ function SunMark() {
   );
 }
 
+function ThermometerMark() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14 14.8V5a2 2 0 1 0-4 0v9.8a4 4 0 1 0 4 0Z" />
+      <path d="M12 11v6" />
+    </svg>
+  );
+}
+
+function ClockMark() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 8v4.5l2.8 1.7" />
+    </svg>
+  );
+}
+
 function statusText(status: 'idle' | 'connecting' | 'open' | 'closed' | 'error'): string {
   switch (status) {
     case 'connecting': return '接続中...';
@@ -56,15 +77,123 @@ function statusText(status: 'idle' | 'connecting' | 'open' | 'closed' | 'error')
   }
 }
 
-export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange }: ChatPanelProps) {
+export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, onSensorStateChange }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [language, setLanguage] = useState<'ja' | 'en'>('ja');
+  const [sensorData, setSensorData] = useState<SensorData | null>(null);
+  const [sensorLoading, setSensorLoading] = useState(true);
+  const [sensorError, setSensorError] = useState('');
+  const [sensorRefreshing, setSensorRefreshing] = useState(false);
+  const [moistureControl, setMoistureControl] = useState<MoistureControl | null>(null);
+  const [moistureDraft, setMoistureDraft] = useState('');
+  const [moistureControlError, setMoistureControlError] = useState('');
+  const [moistureControlSaving, setMoistureControlSaving] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const { messages, status, errorMessage, wsUrl, sendMessage } = useChatSocket(token, true);
+  const { messages, status, errorMessage, sendMessage } = useChatSocket(token, true);
   const isStreaming = useMemo(() => messages.some((m) => m.role === 'assistant' && m.text === ''), [messages]);
 
+  const loadSensorData = async (options?: { showLoading?: boolean; isManualRefresh?: boolean }) => {
+    const showLoading = options?.showLoading ?? false;
+    const isManualRefresh = options?.isManualRefresh ?? false;
+
+    if (showLoading) {
+      setSensorLoading(true);
+    }
+    if (isManualRefresh) {
+      setSensorRefreshing(true);
+    }
+
+    try {
+      const [current, control] = await Promise.all([
+        getCurrentSensorData(token),
+        getMoistureControl(token),
+      ]);
+      setSensorData(current);
+      setMoistureControl(control);
+      setSensorError('');
+    } catch (error) {
+      setSensorError(error instanceof Error ? error.message : 'センサーデータの取得に失敗しました');
+    } finally {
+      setSensorLoading(false);
+      setSensorRefreshing(false);
+    }
+  };
+
   useEffect(() => { onStatusChange?.(status); }, [status, onStatusChange]);
+
+  useEffect(() => {
+    const nextState = sensorError
+      ? 'error'
+      : sensorLoading
+        ? 'loading'
+        : sensorData?.sensor_status === 'normal'
+          ? 'connected'
+          : sensorData?.sensor_status === 'stale'
+            ? 'stale'
+            : sensorData?.sensor_status === 'invalid'
+              ? 'invalid'
+              : 'none';
+    onSensorStateChange?.(nextState);
+  }, [sensorData, sensorError, sensorLoading, onSensorStateChange]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const safeLoad = async (showLoading: boolean) => {
+      if (showLoading) {
+        setSensorLoading(true);
+      }
+      try {
+        const [current, control] = await Promise.all([
+          getCurrentSensorData(token),
+          getMoistureControl(token),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        setSensorData(current);
+        setMoistureControl(control);
+        setSensorError('');
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+        setSensorError(error instanceof Error ? error.message : 'センサーデータの取得に失敗しました');
+      } finally {
+        if (!cancelled) {
+          setSensorLoading(false);
+          setSensorRefreshing(false);
+        }
+      }
+    };
+
+    void safeLoad(true);
+    const timer = window.setInterval(() => {
+      void safeLoad(false);
+    }, 30000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (moistureControl?.paused) {
+      setMoistureDraft(
+        typeof moistureControl.manual_value === 'number'
+          ? String(Math.round(moistureControl.manual_value))
+          : sensorData
+            ? String(Math.round(sensorData.moisture_percent))
+            : '',
+      );
+      return;
+    }
+
+    setMoistureDraft('');
+    setMoistureControlError('');
+  }, [moistureControl, sensorData]);
 
   // Auto-scroll
   useEffect(() => {
@@ -82,6 +211,71 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange }: 
   };
 
   const now = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const sensorUpdatedLabel = sensorData
+    ? new Date(sensorData.recorded_at).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+    : '';
+  const sensorStatusLabel = sensorData
+    ? sensorData.sensor_status === 'invalid'
+      ? '一部異常'
+      : sensorData.sensor_status === 'stale'
+        ? '更新待ち'
+        : '正常'
+    : sensorLoading
+      ? '取得中'
+      : sensorError
+      ? '取得失敗'
+      : '未受信';
+  const moisturePaused = moistureControl?.paused ?? false;
+  const moistureControlLabel = moisturePaused ? '水分固定中' : '水分自動';
+  const backendStatusText = status === 'open'
+    ? '盆栽サーバーに接続中'
+    : status === 'connecting'
+      ? '盆栽サーバーへ接続しています...'
+      : `盆栽サーバー: ${statusText(status)}`;
+
+  const handleMoisturePauseToggle = async () => {
+    setMoistureControlSaving(true);
+    setMoistureControlError('');
+
+    try {
+      const nextControl = moisturePaused
+        ? await updateMoistureControl(token, { paused: false, manual_value: null })
+        : await updateMoistureControl(token, {
+            paused: true,
+            manual_value: sensorData ? Math.round(sensorData.moisture_percent) : 50,
+          });
+
+      setMoistureControl(nextControl);
+      await loadSensorData({ isManualRefresh: true });
+    } catch (error) {
+      setMoistureControlError(error instanceof Error ? error.message : '水分固定の更新に失敗しました');
+    } finally {
+      setMoistureControlSaving(false);
+    }
+  };
+
+  const handleMoistureApply = async () => {
+    const parsed = Number(moistureDraft);
+    if (!Number.isFinite(parsed) || parsed < 0 || parsed > 100) {
+      setMoistureControlError('水分値は 0 から 100 の範囲で入力してください');
+      return;
+    }
+
+    setMoistureControlSaving(true);
+    setMoistureControlError('');
+    try {
+      const nextControl = await updateMoistureControl(token, {
+        paused: true,
+        manual_value: parsed,
+      });
+      setMoistureControl(nextControl);
+      await loadSensorData({ isManualRefresh: true });
+    } catch (error) {
+      setMoistureControlError(error instanceof Error ? error.message : '水分値の更新に失敗しました');
+    } finally {
+      setMoistureControlSaving(false);
+    }
+  };
 
   return (
     <section className="k-panel">
@@ -132,23 +326,107 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange }: 
           </div>
         </header>
 
-        {/* ── Sensor / status strip ── */}
-        <div className="k-sensor-strip">
-          <span className="k-mini-badge">
-            <WaterMark />
-            接続 {statusText(status)}
-          </span>
-          <span className="k-mini-badge">
-            <SunMark />
-            会話 {messages.length} 件
-          </span>
-          <span className="k-mini-badge">
-            LLM {wsUrl ? '設定済み' : '未設定'}
-          </span>
-          <span className="k-mini-badge">
-            {language === 'ja' ? '日本語' : 'English'}
-          </span>
-        </div>
+        <section className="k-sensor-board">
+          <div className="k-sensor-board-head">
+            <div className="k-sensor-board-summary">
+              <span className="k-sensor-chip k-sensor-chip-compact">
+                <LeafMark />
+                <span className="k-sensor-chip-label">デバイス</span>
+                <span className="k-sensor-chip-value">{sensorData?.device_id || '---'}</span>
+              </span>
+              <span className={`k-sensor-chip k-sensor-chip-compact k-sensor-chip-status-${sensorData?.sensor_status ?? 'unknown'}`}>
+                <LeafMark />
+                <span className="k-sensor-chip-label">状態</span>
+                <span className="k-sensor-chip-value">{sensorStatusLabel}</span>
+              </span>
+              <span className="k-sensor-chip k-sensor-chip-compact">
+                <SunMark />
+                <span className="k-sensor-chip-label">照度</span>
+                <span className="k-sensor-chip-value">{sensorData ? `${Math.round(sensorData.light_lux)} lux` : '---'}</span>
+              </span>
+              <span className="k-sensor-chip k-sensor-chip-compact">
+                <WaterMark />
+                <span className="k-sensor-chip-label">水分</span>
+                <span className="k-sensor-chip-value">{sensorData ? `${Math.round(sensorData.moisture_percent)}%` : '---'}</span>
+              </span>
+              <span className={`k-sensor-chip k-sensor-chip-compact${moisturePaused ? ' k-sensor-chip-status-stale' : ''}`}>
+                <WaterMark />
+                <span className="k-sensor-chip-label">水分制御</span>
+                <span className="k-sensor-chip-value">{moistureControlLabel}</span>
+              </span>
+              <span className="k-sensor-chip k-sensor-chip-compact">
+                <ThermometerMark />
+                <span className="k-sensor-chip-label">気温</span>
+                <span className="k-sensor-chip-value">{sensorData ? `${sensorData.temperature_celsius.toFixed(1)}℃` : '---'}</span>
+              </span>
+              <span className="k-sensor-chip k-sensor-chip-compact">
+                <ClockMark />
+                <span className="k-sensor-chip-label">最終更新</span>
+                <span className="k-sensor-chip-value">{sensorUpdatedLabel || '---'}</span>
+              </span>
+              <span className="k-sensor-chip k-sensor-chip-compact">
+                <span className="k-sensor-chip-label">会話</span>
+                <span className="k-sensor-chip-value">{messages.length} 件</span>
+              </span>
+              <span className="k-sensor-chip k-sensor-chip-compact">
+                <span className="k-sensor-chip-label">表示</span>
+                <span className="k-sensor-chip-value">{language === 'ja' ? '日本語' : 'English'}</span>
+              </span>
+            </div>
+            <div className="k-sensor-board-actions">
+              <button
+                type="button"
+                className="k-esp-refresh-btn"
+                onClick={() => void handleMoisturePauseToggle()}
+                disabled={sensorLoading || moistureControlSaving}
+              >
+                {moistureControlSaving
+                  ? '更新中...'
+                  : moisturePaused
+                    ? '水分自動へ戻す'
+                    : '水分を一時停止'}
+              </button>
+              {moisturePaused && (
+                <>
+                  <label className="k-moisture-input-wrap">
+                    <span className="sr-only">固定する水分値</span>
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={moistureDraft}
+                      onChange={(event) => setMoistureDraft(event.target.value)}
+                      disabled={moistureControlSaving}
+                      aria-label="固定する水分値"
+                    />
+                    <span>%</span>
+                  </label>
+                  <button
+                    type="button"
+                    className="k-esp-refresh-btn"
+                    onClick={() => void handleMoistureApply()}
+                    disabled={moistureControlSaving}
+                  >
+                    値を反映
+                  </button>
+                </>
+              )}
+              <button
+                type="button"
+                className="k-esp-refresh-btn"
+                onClick={() => void loadSensorData({ isManualRefresh: true })}
+                disabled={sensorLoading || sensorRefreshing || moistureControlSaving}
+              >
+                {sensorRefreshing ? '再確認中...' : '再確認'}
+              </button>
+            </div>
+          </div>
+          {moistureControlError && (
+            <p className="k-moisture-control-error">{moistureControlError}</p>
+          )}
+        </section>
 
         {/* ── Conversation pane ── */}
         <section className="k-conversation-pane">
@@ -230,7 +508,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange }: 
             <p>
               {isStreaming
                 ? `${bonsaiName} が言葉を選んでいます...`
-                : (errorMessage || (status === 'open' ? `${wsUrl} に接続中` : `バックエンド: ${wsUrl}`))}
+                : (errorMessage || sensorError || backendStatusText)}
             </p>
             <button
               type="submit"

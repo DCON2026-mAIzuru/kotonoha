@@ -32,6 +32,7 @@ func (s *ProfileService) Get(ctx context.Context, userID string) (*models.Bonsai
 func (s *ProfileService) Upsert(ctx context.Context, input models.UpsertBonsaiProfileInput) (*models.BonsaiProfile, error) {
 	input.Name = strings.TrimSpace(input.Name)
 	input.Personality = strings.TrimSpace(input.Personality)
+	input.Backstory = strings.TrimSpace(input.Backstory)
 
 	switch {
 	case input.UserID == "":
@@ -44,6 +45,8 @@ func (s *ProfileService) Upsert(ctx context.Context, input models.UpsertBonsaiPr
 		return nil, errors.New("盆栽の名前は50文字以内で入力してください")
 	case len([]rune(input.Personality)) > 500:
 		return nil, errors.New("性格設定は500文字以内で入力してください")
+	case len([]rune(input.Backstory)) > 2000:
+		return nil, errors.New("来歴・思い出は2000文字以内で入力してください")
 	}
 
 	return s.store.UpsertBonsaiProfile(ctx, input)

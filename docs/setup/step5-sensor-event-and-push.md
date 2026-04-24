@@ -5,7 +5,7 @@
 - `POST /api/v1/sensor`
   センサー値を受け取り、最新状態を `sensor_data` に保存する API
 - `SensorService`
-  センサー入力の検証、最新値更新、水分急上昇イベント判定、通知文生成を担当
+  センサー入力の検証、最新値更新、水分急上昇 / 低水分イベント判定、通知文生成を担当
 - `internal/realtime`
   ユーザーごとの WebSocket 接続を保持し、サーバー起点のメッセージを配信するハブ
 - `internal/webpush`
@@ -41,9 +41,13 @@
 
 ## イベント発火条件
 
-- 直前の保存値から `3分以内`
-- `moisture_percent` が `20` ポイント以上上昇
-- 直近 `2時間` に `role=event` の自発通知がない
+- `watering_detected`
+  - 直前の保存値から `3分以内`
+  - `moisture_percent` が `20` ポイント以上上昇
+  - 直近 `2時間` に同じイベント名の自発通知がない
+- `low_moisture_detected`
+  - 直前の保存値が `20%` 以上で、今回 `20%` 未満に下がった
+  - 直近 `2時間` に同じイベント名の自発通知がない
 
 条件を満たした場合、LLM で通知文を生成し、以下を同時に行います。
 
@@ -90,7 +94,7 @@
 
 - `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` が未設定の場合、Push送信はスキップされる
 - センサー送信先ユーザーの解決は、現段階では `X-Sensor-User-ID` ヘッダーで受ける暫定運用
-- `sensor_data` は最新値のみ保持し、急上昇判定は「直前の1件」と比較している
+- `sensor_data` は最新値のみ保持し、急上昇判定 / 低水分判定は「直前の1件」と比較している
 - 自発通知の文章生成にはプロフィール名・性格を反映するが、通常チャット側の動的プロンプトはまだ Step 7 の範囲
 
 ## 想定確認手順
@@ -99,6 +103,6 @@
 2. ブラウザまたはクライアントで `/ws/chat?token=...` に接続
 3. 低い `moisture_percent` で一度 `POST /api/v1/sensor`
 4. 3分以内に `20` ポイント以上高い `moisture_percent` で再度 `POST /api/v1/sensor`
-5. WebSocket に `source=sensor_event` の `reply_chunk` / `reply_done` が届くことを確認
-6. Push Subscription が登録済みかつ VAPID 設定済みなら Push 通知も届くことを確認
-
+5. または `20%` 以上から `20%` 未満に下がる `moisture_percent` を送って乾燥イベントを発火させる
+6. WebSocket に `source=sensor_event` の `reply_chunk` / `reply_done` が届くことを確認
+7. Push Subscription が登録済みかつ VAPID 設定済みなら Push 通知も届くことを確認

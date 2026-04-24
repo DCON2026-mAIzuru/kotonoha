@@ -3,9 +3,11 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 	"strings"
 
 	"github.com/apple/kotonoha/backend/internal/models"
+	pushtransport "github.com/apple/kotonoha/backend/internal/webpush"
 )
 
 type pushSubscriptionStore interface {
@@ -14,12 +16,26 @@ type pushSubscriptionStore interface {
 	DeletePushSubscriptionByID(ctx context.Context, userID string, subscriptionID string) error
 }
 
-type PushSubscriptionService struct {
-	store pushSubscriptionStore
+type pushSubscriptionSender interface {
+	Enabled() bool
+	Send(ctx context.Context, subscription models.PushSubscription, payload pushtransport.Payload) error
 }
 
-func NewPushSubscriptionService(store pushSubscriptionStore) *PushSubscriptionService {
-	return &PushSubscriptionService{store: store}
+type SendPushDemoResult struct {
+	SentCount   int `json:"sent_count"`
+	FailedCount int `json:"failed_count,omitempty"`
+}
+
+type PushSubscriptionService struct {
+	store      pushSubscriptionStore
+	pushSender pushSubscriptionSender
+}
+
+func NewPushSubscriptionService(store pushSubscriptionStore, pushSender pushSubscriptionSender) *PushSubscriptionService {
+	return &PushSubscriptionService{
+		store:      store,
+		pushSender: pushSender,
+	}
 }
 
 func (s *PushSubscriptionService) List(ctx context.Context, userID string) ([]models.PushSubscription, error) {
@@ -57,4 +73,47 @@ func (s *PushSubscriptionService) Delete(ctx context.Context, userID string, sub
 	}
 
 	return s.store.DeletePushSubscriptionByID(ctx, userID, subscriptionID)
+}
+
+func (s *PushSubscriptionService) SendDemo(ctx context.Context, userID string) (*SendPushDemoResult, error) {
+	userID = strings.TrimSpace(userID)
+
+	switch {
+	case userID == "":
+		return nil, errors.New("ユーザーIDが空です")
+	case s.pushSender == nil || !s.pushSender.Enabled():
+		return nil, errors.New("Push通知送信が設定されていません")
+	}
+
+	subscriptions, err := s.store.ListPushSubscriptionsByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if len(subscriptions) == 0 {
+		return nil, errors.New("Push購読が登録されていません")
+	}
+
+	result := &SendPushDemoResult{}
+	payload := pushtransport.Payload{
+		Title:  "盆栽からのデモ通知",
+		Body:   "Push通知のデモです。設定が有効なら、このメッセージが届きます。",
+		Source: "push_demo",
+		Event:  "demo",
+		Tag:    "push-demo",
+	}
+
+	for _, subscription := range subscriptions {
+		if err := s.pushSender.Send(ctx, subscription, payload); err != nil {
+			result.FailedCount++
+			log.Printf("Pushデモ通知の送信に失敗しました: subscription_id=%s err=%v", subscription.ID, err)
+			continue
+		}
+		result.SentCount++
+	}
+
+	if result.SentCount == 0 {
+		return nil, errors.New("Push通知の送信に失敗しました")
+	}
+
+	return result, nil
 }

@@ -1,4 +1,4 @@
-import type { BonsaiProfile, ChatHistoryEntry, PushSubscriptionRecord, UpsertProfileInput } from '@/types/api';
+import type { BonsaiProfile, ChatHistoryEntry, MoistureControl, PushSubscriptionRecord, SensorData, UpsertProfileInput } from '@/types/api';
 
 const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
 
@@ -49,6 +49,27 @@ export async function getChatHistory(token: string, limit = 50): Promise<ChatHis
   return payload.history ?? [];
 }
 
+export async function getCurrentSensorData(token: string): Promise<SensorData | null> {
+  const payload = await authFetch<{ sensor_data: SensorData | null }>(token, '/api/v1/sensor');
+  return payload.sensor_data;
+}
+
+export async function getMoistureControl(token: string): Promise<MoistureControl> {
+  const payload = await authFetch<{ moisture_control: MoistureControl }>(token, '/api/v1/sensor/moisture-control');
+  return payload.moisture_control;
+}
+
+export async function updateMoistureControl(
+  token: string,
+  input: { paused: boolean; manual_value: number | null },
+): Promise<MoistureControl> {
+  const payload = await authFetch<{ moisture_control: MoistureControl }>(token, '/api/v1/sensor/moisture-control', {
+    method: 'PATCH',
+    body: JSON.stringify(input),
+  });
+  return payload.moisture_control;
+}
+
 export async function upsertPushSubscription(
   token: string,
   endpoint: string,
@@ -60,4 +81,14 @@ export async function upsertPushSubscription(
   });
 
   return payload.subscription;
+}
+
+export async function sendDemoPushNotification(
+  token: string,
+): Promise<{ sent_count: number; failed_count?: number }> {
+  const payload = await authFetch<{ result: { sent_count: number; failed_count?: number } }>(token, '/api/v1/push/demo', {
+    method: 'POST',
+  });
+
+  return payload.result;
 }

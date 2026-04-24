@@ -32,3 +32,4 @@ pnpm-debug.log*
 .vscode/
 DESIGN.md*
 docs/DESIGN.md
+/DL/venv/

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { upsertPushSubscription } from '@/lib/backend-api';
+import { sendDemoPushNotification, upsertPushSubscription } from '@/lib/backend-api';
 import { isPushAvailable, vapidKeyToUint8Array } from '@/lib/web-push';
 
 interface PushPermissionCardProps {
@@ -60,6 +60,22 @@ export function PushPermissionCard({ token, onClose }: PushPermissionCardProps) 
     }
   };
 
+  const sendDemo = async () => {
+    setLoading(true);
+    setStatusText('');
+    setIsError(false);
+    try {
+      const result = await sendDemoPushNotification(token);
+      const failureText = result.failed_count ? ` / 失敗 ${result.failed_count} 件` : '';
+      setStatusText(`デモ通知を送信しました（成功 ${result.sent_count} 件${failureText}）`);
+    } catch (error) {
+      setStatusText(error instanceof Error ? error.message : 'デモ通知の送信に失敗しました');
+      setIsError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="k-push-card">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
@@ -68,7 +84,7 @@ export function PushPermissionCard({ token, onClose }: PushPermissionCardProps) 
           <button type="button" className="k-status-chip" onClick={onClose}>閉じる</button>
         )}
       </div>
-      <p>水やりイベントを検知したとき、盆栽から自発メッセージを受け取れます。</p>
+      <p>水やりや乾燥を検知したとき、盆栽から自発メッセージを受け取れます。</p>
 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 14 }}>
         <span className="k-mini-badge" style={{ fontSize: '0.72rem' }}>
@@ -93,6 +109,16 @@ export function PushPermissionCard({ token, onClose }: PushPermissionCardProps) 
         onClick={() => void enablePush()}
       >
         {loading ? '設定中...' : '通知を有効化する'}
+      </button>
+
+      <button
+        type="button"
+        disabled={!supported || loading}
+        className="k-status-chip"
+        style={{ marginTop: 10 }}
+        onClick={() => void sendDemo()}
+      >
+        デモ通知を送る
       </button>
 
       {statusText && (
