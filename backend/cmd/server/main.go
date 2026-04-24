@@ -49,7 +49,7 @@ func main() {
 		Config:                  cfg,
 		HealthService:           service.NewHealthService(store),
 		ProfileService:          service.NewProfileService(store),
-		PushSubscriptionService: service.NewPushSubscriptionService(store),
+		PushSubscriptionService: service.NewPushSubscriptionService(store, pushSender),
 		ChatService:             service.NewChatService(store, llmStreamer, llmEmbedder),
 		SensorService:           service.NewSensorService(store, llmStreamer, realtimeHub, pushSender),
 		RealtimeHub:             realtimeHub,

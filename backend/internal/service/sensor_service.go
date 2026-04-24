@@ -7,6 +7,7 @@ import (
 	"log"
 	"math"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/apple/kotonoha/backend/internal/llm"
@@ -52,6 +53,8 @@ type SensorService struct {
 	llm        chatLLMStreamer
 	notifier   sensorNotifier
 	pushSender sensorPushSender
+	mu         sync.RWMutex
+	controls   map[string]moistureControlState
 }
 
 type IngestSensorInput struct {
@@ -72,13 +75,148 @@ type IngestSensorResult struct {
 	NotificationWarning string             `json:"notification_warning,omitempty"`
 }
 
+type MoistureControl struct {
+	Paused      bool       `json:"paused"`
+	ManualValue *float64   `json:"manual_value"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
+}
+
+type UpdateMoistureControlInput struct {
+	Paused      bool
+	ManualValue *float64
+}
+
+type moistureControlState struct {
+	Paused      bool
+	ManualValue *float64
+	UpdatedAt   time.Time
+}
+
 func NewSensorService(store sensorStore, llmStreamer chatLLMStreamer, notifier sensorNotifier, pushSender sensorPushSender) *SensorService {
 	return &SensorService{
 		store:      store,
 		llm:        llmStreamer,
 		notifier:   notifier,
 		pushSender: pushSender,
+		controls:   make(map[string]moistureControlState),
 	}
+}
+
+func (s *SensorService) GetCurrent(ctx context.Context, userID string) (*models.SensorData, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("センサーサービスが設定されていません")
+	}
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("センサーユーザーIDが空です")
+	}
+
+	sensorData, err := s.store.GetSensorDataByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if sensorData == nil {
+		return nil, nil
+	}
+
+	if sensorData.SensorStatus != sensorStatusInvalid {
+		sensorData.SensorStatus = sensorStatusFor(sensorData.RecordedAt.UTC(), time.Now().UTC(), false)
+	}
+
+	return s.applyMoistureControl(userID, sensorData), nil
+}
+
+func (s *SensorService) GetMoistureControl(_ context.Context, userID string) (*MoistureControl, error) {
+	if s == nil {
+		return nil, errors.New("センサーサービスが設定されていません")
+	}
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("センサーユーザーIDが空です")
+	}
+
+	s.mu.RLock()
+	state, ok := s.controls[userID]
+	s.mu.RUnlock()
+	if !ok {
+		return &MoistureControl{Paused: false}, nil
+	}
+
+	return moistureControlFromState(state), nil
+}
+
+func (s *SensorService) UpdateMoistureControl(ctx context.Context, userID string, input UpdateMoistureControlInput) (*MoistureControl, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("センサーサービスが設定されていません")
+	}
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("センサーユーザーIDが空です")
+	}
+	if input.ManualValue != nil {
+		switch {
+		case math.IsNaN(*input.ManualValue) || math.IsInf(*input.ManualValue, 0):
+			return nil, errors.New("manual_value が不正です")
+		case *input.ManualValue < 0 || *input.ManualValue > 100:
+			return nil, errors.New("manual_value は 0 から 100 の範囲で指定してください")
+		}
+	}
+
+	if !input.Paused {
+		s.mu.Lock()
+		delete(s.controls, userID)
+		s.mu.Unlock()
+		return &MoistureControl{Paused: false}, nil
+	}
+
+	current, err := s.store.GetSensorDataByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	manualValue := cloneFloat64Pointer(input.ManualValue)
+	if manualValue == nil && current != nil {
+		manualValue = float64Pointer(current.MoisturePercent)
+	}
+
+	state := moistureControlState{
+		Paused:      true,
+		ManualValue: manualValue,
+		UpdatedAt:   time.Now().UTC(),
+	}
+
+	s.mu.Lock()
+	s.controls[userID] = state
+	s.mu.Unlock()
+
+	if current != nil && manualValue != nil {
+		status := current.SensorStatus
+		if status != sensorStatusInvalid {
+			status = sensorStatusFor(current.RecordedAt.UTC(), time.Now().UTC(), false)
+		}
+
+		rawPayload := cloneRawPayload(current.RawPayload)
+		rawPayload["moisture_control_paused"] = true
+		rawPayload["manual_moisture_percent"] = *manualValue
+
+		if _, err := s.store.UpsertSensorData(ctx, models.UpsertSensorDataInput{
+			UserID:             userID,
+			DeviceID:           current.DeviceID,
+			MoisturePercent:    *manualValue,
+			LightLux:           current.LightLux,
+			TemperatureCelsius: current.TemperatureCelsius,
+			RecordedAt:         current.RecordedAt.UTC(),
+			SensorStatus:       status,
+			RawPayload:         rawPayload,
+		}); err != nil {
+			return nil, err
+		}
+	}
+
+	return moistureControlFromState(state), nil
 }
 
 func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*IngestSensorResult, error) {
@@ -116,7 +254,28 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		return nil, ErrSensorReadingOutOfOrder
 	}
 
+	rawMoisturePercent := input.MoisturePercent
+	control := s.moistureControlForUser(input.UserID)
+	if control.Paused && control.ManualValue != nil {
+		input.MoisturePercent = *control.ManualValue
+	}
+
 	status, sanitizedMoisture, sanitizedLight, sanitizedTemperature, issues := normalizeSensorReading(input, time.Now().UTC())
+
+	rawPayload := map[string]any{
+		"device_id":           input.DeviceID,
+		"recorded_at":         recordedAt.Format(time.RFC3339),
+		"moisture_percent":    rawMoisturePercent,
+		"light_lux":           input.LightLux,
+		"temperature_celsius": input.TemperatureCelsius,
+		"sensor_issues":       issues,
+	}
+	if control.Paused {
+		rawPayload["moisture_control_paused"] = true
+		if control.ManualValue != nil {
+			rawPayload["manual_moisture_percent"] = *control.ManualValue
+		}
+	}
 
 	sensorData, err := s.store.UpsertSensorData(ctx, models.UpsertSensorDataInput{
 		UserID:             input.UserID,
@@ -126,14 +285,7 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		TemperatureCelsius: sanitizedTemperature,
 		RecordedAt:         recordedAt,
 		SensorStatus:       status,
-		RawPayload: map[string]any{
-			"device_id":           input.DeviceID,
-			"recorded_at":         recordedAt.Format(time.RFC3339),
-			"moisture_percent":    input.MoisturePercent,
-			"light_lux":           input.LightLux,
-			"temperature_celsius": input.TemperatureCelsius,
-			"sensor_issues":       issues,
-		},
+		RawPayload:         rawPayload,
 	})
 	if err != nil {
 		return nil, err
@@ -240,6 +392,78 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 	}
 
 	return result, nil
+}
+
+func (s *SensorService) applyMoistureControl(userID string, sensorData *models.SensorData) *models.SensorData {
+	if sensorData == nil {
+		return nil
+	}
+
+	control := s.moistureControlForUser(userID)
+	if !control.Paused || control.ManualValue == nil {
+		return sensorData
+	}
+
+	cloned := *sensorData
+	cloned.MoisturePercent = *control.ManualValue
+	cloned.RawPayload = cloneRawPayload(sensorData.RawPayload)
+	cloned.RawPayload["moisture_control_paused"] = true
+	cloned.RawPayload["manual_moisture_percent"] = *control.ManualValue
+	return &cloned
+}
+
+func (s *SensorService) moistureControlForUser(userID string) moistureControlState {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	state, ok := s.controls[strings.TrimSpace(userID)]
+	if !ok {
+		return moistureControlState{}
+	}
+
+	return moistureControlState{
+		Paused:      state.Paused,
+		ManualValue: cloneFloat64Pointer(state.ManualValue),
+		UpdatedAt:   state.UpdatedAt,
+	}
+}
+
+func moistureControlFromState(state moistureControlState) *MoistureControl {
+	if !state.Paused {
+		return &MoistureControl{Paused: false}
+	}
+
+	updatedAt := state.UpdatedAt
+	return &MoistureControl{
+		Paused:      true,
+		ManualValue: cloneFloat64Pointer(state.ManualValue),
+		UpdatedAt:   &updatedAt,
+	}
+}
+
+func float64Pointer(value float64) *float64 {
+	return &value
+}
+
+func cloneFloat64Pointer(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+
+	cloned := *value
+	return &cloned
+}
+
+func cloneRawPayload(rawPayload map[string]any) map[string]any {
+	if len(rawPayload) == 0 {
+		return make(map[string]any)
+	}
+
+	cloned := make(map[string]any, len(rawPayload))
+	for key, value := range rawPayload {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func (s *SensorService) generateWateringReaction(

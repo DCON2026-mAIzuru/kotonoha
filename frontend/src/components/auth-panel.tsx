@@ -29,19 +29,32 @@ export function AuthPanel({ onSignIn, onSignUp, onGoogleSignIn }: AuthPanelProps
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [isError, setIsError] = useState(false);
   const [success, setSuccess] = useState(false);
 
   const run = async (fn: () => Promise<void>) => {
     setLoading(true);
     setMessage('');
-    setIsError(false);
     try {
       await fn();
       setSuccess(true);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : '認証に失敗しました');
-      setIsError(true);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setMessage('');
+    setSuccess(false);
+
+    try {
+      await onGoogleSignIn();
+      // OAuth はここで「認証完了」ではなく、外部プロバイダへの遷移開始が成功した段階。
+      setMessage('Google の認証画面へ移動しています...');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Google ログインに失敗しました');
     } finally {
       setLoading(false);
     }
@@ -52,12 +65,10 @@ export function AuthPanel({ onSignIn, onSignUp, onGoogleSignIn }: AuthPanelProps
     if (mode === 'register') {
       if (password !== confirmPassword) {
         setMessage('パスワードが一致しません');
-        setIsError(true);
         return;
       }
       if (password.length < 6) {
         setMessage('パスワードは6文字以上で設定してください');
-        setIsError(true);
         return;
       }
       void run(() => onSignUp(email, password));
@@ -69,7 +80,6 @@ export function AuthPanel({ onSignIn, onSignUp, onGoogleSignIn }: AuthPanelProps
   const switchMode = (next: 'login' | 'register') => {
     setMode(next);
     setMessage('');
-    setIsError(false);
     setEmail('');
     setPassword('');
     setConfirmPassword('');
@@ -127,7 +137,7 @@ export function AuthPanel({ onSignIn, onSignUp, onGoogleSignIn }: AuthPanelProps
         ) : (
           <>
             {/* ── エラー ── */}
-            {message && isError && (
+            {message && (
               <div className="k-auth-error">
                 <AlertCircle size={16} strokeWidth={1.8} style={{ flexShrink: 0, marginTop: 1 }} />
                 <span>{message}</span>
@@ -229,7 +239,7 @@ export function AuthPanel({ onSignIn, onSignUp, onGoogleSignIn }: AuthPanelProps
               type="button"
               disabled={loading}
               className="k-btn-google"
-              onClick={() => void run(() => onGoogleSignIn())}
+              onClick={() => void handleGoogleSignIn()}
             >
               <GoogleIcon />
               Google でログイン

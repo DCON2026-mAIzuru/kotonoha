@@ -138,6 +138,7 @@ npm run dev
 
 - GET /api/v1/push/subscriptions
 - POST /api/v1/push/subscribe
+- POST /api/v1/push/demo
 - DELETE /api/v1/push/subscriptions/:id
 
 ### Sensor

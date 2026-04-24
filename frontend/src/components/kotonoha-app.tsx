@@ -16,6 +16,7 @@ export function KotonohaApp() {
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
   const [llmOnline, setLlmOnline] = useState(false);
+  const [espState, setEspState] = useState<'loading' | 'connected' | 'stale' | 'invalid' | 'error' | 'none'>('loading');
   const [showPush, setShowPush] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -161,6 +162,19 @@ export function KotonohaApp() {
     await auth.signOut();
   };
 
+  const espOnline = espState === 'connected';
+  const espLabel = espState === 'connected'
+    ? 'ESP 接続中'
+    : espState === 'stale'
+      ? 'ESP 更新待ち'
+      : espState === 'invalid'
+        ? 'ESP 値異常'
+        : espState === 'error'
+          ? 'ESP 確認失敗'
+          : espState === 'loading'
+            ? 'ESP 確認中'
+            : 'ESP 未接続';
+
   /* ── Main chat view ── */
   return (
     <div className="k-shell">
@@ -175,10 +189,16 @@ export function KotonohaApp() {
         </div>
 
         <div className="k-hero-status">
-          <span className={`k-status-pill${llmOnline ? ' k-status-pill-online' : ''}`}>
-            <span className="k-status-dot" />
-            {llmOnline ? 'LLM 接続中' : 'LLM オフライン'}
-          </span>
+          <div className="k-status-pills">
+            <span className={`k-status-pill${llmOnline ? ' k-status-pill-online' : ''}`}>
+              <span className="k-status-dot" />
+              {llmOnline ? 'LLM 接続中' : 'LLM オフライン'}
+            </span>
+            <span className={`k-status-pill k-status-pill-esp${espOnline ? ' k-status-pill-online' : ''}`}>
+              <span className="k-status-dot" />
+              {espLabel}
+            </span>
+          </div>
 
           <div className="k-status-meta">
             <PwaInstallButton />
@@ -318,6 +338,7 @@ export function KotonohaApp() {
           bonsaiName={profile.name}
           bonsaiSpecies={profile.personality}
           onStatusChange={(status) => setLlmOnline(status === 'open')}
+          onSensorStateChange={setEspState}
         />
       </main>
     </div>

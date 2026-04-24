@@ -131,3 +131,74 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 		t.Fatalf("expected 1 archived memory, got %d", len(store.createdMemories))
 	}
 }
+
+func TestFormatSensorPromptSectionIncludesMoistureState(t *testing.T) {
+	t.Parallel()
+
+	prompt := formatSensorPromptSection(&models.SensorData{
+		MoisturePercent:    12,
+		LightLux:           800,
+		TemperatureCelsius: 22,
+		RecordedAt:         time.Date(2026, 4, 18, 14, 0, 0, 0, time.FixedZone("JST", 9*60*60)),
+		SensorStatus:       sensorStatusNormal,
+	})
+
+	for _, want := range []string{
+		"土壌水分状態は「かなり乾燥」です。",
+		"喉がからからで、すぐに水がほしい",
+		"テンション指定は「かなり低め。弱り気味で切実。勢いよりもしんどさを優先」です。",
+		"最初の一文では必ず 強い渇きとしんどさをはっきり伝える。",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt does not contain %q\nprompt=%s", want, prompt)
+		}
+	}
+}
+
+func TestFormatSensorPromptSectionIncludesHighTensionForWetState(t *testing.T) {
+	t.Parallel()
+
+	prompt := formatSensorPromptSection(&models.SensorData{
+		MoisturePercent:    92,
+		LightLux:           1400,
+		TemperatureCelsius: 24,
+		RecordedAt:         time.Date(2026, 4, 18, 14, 0, 0, 0, time.FixedZone("JST", 9*60*60)),
+		SensorStatus:       sensorStatusNormal,
+	})
+
+	for _, want := range []string{
+		"土壌水分状態は「かなり潤沢」です。",
+		"テンション指定は「かなり高め。はっきり上機嫌で弾ける調子」です。",
+		"水がたっぷり巡って、もうごきげん絶好調ぼんす！",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt does not contain %q\nprompt=%s", want, prompt)
+		}
+	}
+}
+
+func TestClassifyMoistureStateBuckets(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		moisture float64
+		want     string
+	}{
+		{moisture: 10, want: "かなり乾燥"},
+		{moisture: 30, want: "やや乾燥"},
+		{moisture: 50, want: "快適"},
+		{moisture: 80, want: "しっとり"},
+		{moisture: 95, want: "かなり潤沢"},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.want, func(t *testing.T) {
+			t.Parallel()
+			got := classifyMoistureState(tt.moisture)
+			if got.label != tt.want {
+				t.Fatalf("classifyMoistureState(%v) = %q, want %q", tt.moisture, got.label, tt.want)
+			}
+		})
+	}
+}

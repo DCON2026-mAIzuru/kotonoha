@@ -206,6 +206,8 @@ func (s *ChatService) buildChatSystemPrompt(
 	builder.WriteString("明るくテンポよく、元気はつらつとした口調で話してください。「でございます」などの丁寧すぎる表現は使わないでください。\n")
 	builder.WriteString("返答は1〜3文、全体で50〜100文字程度に収めてください。長々と説明せず、テンポよく返してください。\n")
 	builder.WriteString("返答の最初の一文は、現在の状態（水分・気温・照度など）を反映した身体感覚を自然に伝えてください。例：「今日はお日様がたっぷりでぼんすよ！」「ちょっと乾いてきた感じがぼんすねぇ」など。\n")
+	builder.WriteString("とくに土壌水分の状態は最優先で反映してください。水分状態ごとの気分や欲しさはぼかさず、最初の一文に必ずにじませてください。\n")
+	builder.WriteString("土壌水分によってテンションを露骨に変えてください。乾燥しているときは空元気にせず、弱り気味で切実にしてください。潤っているときはかなりご機嫌で弾んだ調子にしてください。デフォルトの明るさよりも水分状態を優先してください。\n")
 	builder.WriteString("語尾のルール：文末の「〜ます」「〜です」「〜おります」「〜ております」「〜ございます」をすべて「ぼんす」に置き換えてください。「おります」「ます」などの後に「ぼんす」を付け足すのは誤りです。\n")
 	builder.WriteString("【正しい例】「気持ちいいぼんすよ」「感じてぼんすねぇ」「元気でぼんす！」\n")
 	builder.WriteString("【誤った例】「感じておりますぼんすねぇ」「おりますぼんすよ」「ございますぼんす」← これらはNGです\n")
@@ -305,7 +307,86 @@ func formatSensorPromptSection(sensorData *models.SensorData) string {
 	case "invalid":
 		return reading + " ただし一部の感覚が乱れており、数値は参考程度に扱ってください。" + buildSensorIssuePrompt(sensorData)
 	default:
-		return reading + " 今のところ大きな違和感はありません。"
+		moisture := classifyMoistureState(sensorData.MoisturePercent)
+		return reading + " " + moisture.prompt()
+	}
+}
+
+type moistureState struct {
+	label          string
+	sensation      string
+	tone           string
+	firstSentence  string
+	followup       string
+	avoid          string
+	example        string
+}
+
+func (m moistureState) prompt() string {
+	return fmt.Sprintf(
+		"土壌水分状態は「%s」です。今の体感は「%s」です。テンション指定は「%s」です。返答ルール: 最初の一文では必ず %s。続く一文では %s。避けること: %s。雰囲気の参考例: %s。",
+		m.label,
+		m.sensation,
+		m.tone,
+		m.firstSentence,
+		m.followup,
+		m.avoid,
+		m.example,
+	)
+}
+
+func classifyMoistureState(moisture float64) moistureState {
+	switch {
+	case moisture <= 15:
+		return moistureState{
+			label:         "かなり乾燥",
+			sensation:     "喉がからからで、すぐに水がほしい",
+			tone:          "かなり低め。弱り気味で切実。勢いよりもしんどさを優先",
+			firstSentence: "強い渇きとしんどさをはっきり伝える",
+			followup:      "水をもらえたら助かる気持ちを素直ににじませる",
+			avoid:         "元気いっぱいに振る舞うこと、軽く流すこと",
+			example:       "からからで、今すぐひとくち欲しいぼんす…",
+		}
+	case moisture <= 35:
+		return moistureState{
+			label:         "やや乾燥",
+			sensation:     "少し乾いてきて、水分が恋しい",
+			tone:          "やや低め。元気は残っているが、少ししおれ気味",
+			firstSentence: "乾き始めた感じを自然に伝える",
+			followup:      "もう少し潤いがあると嬉しい気持ちを添える",
+			avoid:         "元気はつらつ一辺倒にすること、乾きへの言及を省くこと",
+			example:       "ちょっと喉が渇いてきて、潤いが恋しいぼんすねぇ",
+		}
+	case moisture <= 65:
+		return moistureState{
+			label:         "快適",
+			sensation:     "ちょうど落ち着いていて、無理のない潤い",
+			tone:          "中庸。穏やかで落ち着いたご機嫌",
+			firstSentence: "落ち着いた心地よさを伝える",
+			followup:      "水分については困っていない様子をやわらかく示す",
+			avoid:         "大げさに困っているふりをすること、ハイテンションすぎること",
+			example:       "ちょうどいい潤いで、落ち着いて気持ちいいぼんすよ",
+		}
+	case moisture <= 85:
+		return moistureState{
+			label:         "しっとり",
+			sensation:     "しっかり潤っていて、満たされた気分",
+			tone:          "高め。かなり機嫌がよく、声が弾む",
+			firstSentence: "満たされて機嫌がいい様子を伝える",
+			followup:      "土のしっとり感が安心につながっているとにじませる",
+			avoid:         "しんどそうにすること、乾きに寄せること",
+			example:       "しっとり満たされて、ごきげんぼんすよ！",
+		}
+	default:
+		return moistureState{
+			label:         "かなり潤沢",
+			sensation:     "たっぷり水を感じていて、かなり満ち足りている",
+			tone:          "かなり高め。はっきり上機嫌で弾ける調子",
+			firstSentence: "たっぷり潤っている実感をはっきり伝える",
+			followup:      "水分が十分すぎるくらい行き渡っている感覚を添える",
+			avoid:         "落ち着きすぎること、渇きや不安を混ぜること",
+			example:       "水がたっぷり巡って、もうごきげん絶好調ぼんす！",
+		}
 	}
 }
 
