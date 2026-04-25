@@ -1215,15 +1215,19 @@ button { appearance: none; }
 /* ── Profile setup ── */
 .k-profile-shell {
   flex: 1;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   overflow-y: auto;
   align-items: center;
-  padding: 12px 0 24px;
+  padding: 12px 0 max(24px, env(safe-area-inset-bottom));
+  position: relative;
+  z-index: 1;
 }
 
 .k-profile-card {
   position: relative;
+  flex: 0 0 auto;
   width: 100%;
   max-width: 560px;
   padding: 36px 32px 32px;
@@ -1359,4 +1363,13 @@ button { appearance: none; }
   .k-composer textarea { min-height: 84px; max-height: 22dvh; font-size: 0.88rem; }
   .k-composer-footer { flex-direction: column; align-items: stretch; gap: 8px; }
   .k-submit-btn { width: 100%; min-width: 0; box-shadow: none; }
+}
+
+@media (max-height: 820px) {
+  .k-profile-shell { padding-top: 4px; }
+  .k-profile-card { padding: 26px 28px 28px; }
+  .k-profile-card > p { margin-bottom: 16px; }
+  .k-profile-card .k-field { margin-bottom: 12px; }
+  .k-profile-card .k-textarea { min-height: 112px; }
+  .k-profile-card .k-field:nth-of-type(3) .k-textarea { min-height: 132px; }
 }
