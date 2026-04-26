@@ -40,6 +40,8 @@ html, body {
   color: var(--text);
 }
 
+html { font-size: 15px; }
+
 body {
   background:
     radial-gradient(circle at top left, rgba(226, 213, 189, 0.42), transparent 26%),
@@ -55,10 +57,10 @@ button { appearance: none; }
   position: relative;
   height: 100dvh;
   min-height: 100vh;
-  padding: 22px 20px 28px;
+  padding: 16px 16px 20px;
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 12px;
   overflow: hidden;
 }
 
@@ -81,7 +83,7 @@ button { appearance: none; }
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
+  gap: 12px;
   flex: 0 0 auto;
 }
 
@@ -95,7 +97,7 @@ button { appearance: none; }
 
 .k-hero h1 {
   margin: 0;
-  font-size: clamp(1.9rem, 4vw, 2.7rem);
+  font-size: clamp(1.55rem, 3.2vw, 2.25rem);
   line-height: 1.02;
   letter-spacing: -0.03em;
   font-weight: 500;
@@ -125,13 +127,13 @@ button { appearance: none; }
 .k-status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px 14px;
+  gap: 8px;
+  padding: 8px 12px;
   border: 1px solid var(--line);
   border-radius: 999px;
   background: rgba(255, 254, 250, 0.82);
   box-shadow: var(--shadow-soft);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
 }
 
 .k-status-dot {
@@ -184,14 +186,14 @@ button { appearance: none; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 34px;
-  padding: 7px 12px;
+  min-height: 30px;
+  padding: 6px 10px;
   border: 1px solid rgba(54, 43, 31, 0.08);
   border-radius: 999px;
   background: rgba(255, 254, 250, 0.78);
   color: #756f63;
   box-shadow: var(--shadow-soft);
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   line-height: 1;
   cursor: pointer;
   transition: transform 160ms ease;
@@ -200,8 +202,8 @@ button { appearance: none; }
 .k-status-chip:hover { transform: translateY(-1px); }
 
 .k-status-chip-icon {
-  width: 34px;
-  min-width: 34px;
+  width: 30px;
+  min-width: 30px;
   padding: 0;
 }
 
@@ -349,7 +351,7 @@ button { appearance: none; }
   position: relative;
   height: 100%;
   border: 1px solid var(--line);
-  border-radius: 26px;
+  border-radius: 22px;
   background:
     linear-gradient(180deg, rgba(255, 254, 250, 0.95), rgba(250, 245, 237, 0.9)),
     var(--paper);
@@ -369,7 +371,7 @@ button { appearance: none; }
 
 /* Chat grid */
 .k-chat {
-  padding: 16px 18px 14px;
+  padding: 12px 14px;
   height: 100%;
   min-height: 0;
   display: grid;
@@ -388,9 +390,9 @@ button { appearance: none; }
 
 /* Avatar */
 .k-avatar {
-  width: 58px;
-  height: 58px;
-  border-radius: 18px;
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   background: linear-gradient(180deg, #678f6e, #587f5c);
@@ -398,7 +400,7 @@ button { appearance: none; }
   flex-shrink: 0;
 }
 
-.k-avatar svg { width: 20px; height: 20px; }
+.k-avatar svg { width: 18px; height: 18px; }
 
 /* Chat title block */
 .k-chat-title-block {
@@ -410,7 +412,7 @@ button { appearance: none; }
 
 .k-chat-title-block h2 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1rem;
   line-height: 1.18;
   font-weight: 500;
 }
@@ -441,6 +443,11 @@ button { appearance: none; }
   flex-wrap: wrap;
   justify-content: flex-end;
   color: #b8b2a7;
+}
+
+.k-mobile-chat-actions,
+.k-mobile-info-panel {
+  display: none;
 }
 
 /* Language switcher */
@@ -491,10 +498,10 @@ button { appearance: none; }
 
 /* Sensor board */
 .k-sensor-board {
-  margin-top: 10px;
-  padding: 12px 14px 10px;
+  margin-top: 8px;
+  padding: 10px 12px 8px;
   border: 1px solid rgba(54, 43, 31, 0.06);
-  border-radius: 22px;
+  border-radius: 18px;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(248, 244, 236, 0.92));
 }
@@ -545,9 +552,9 @@ button { appearance: none; }
 .k-sensor-chip {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  min-height: 38px;
-  padding: 8px 12px;
+  gap: 6px;
+  min-height: 32px;
+  padding: 6px 10px;
   border: 1px solid rgba(54, 43, 31, 0.06);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.82);
@@ -599,8 +606,8 @@ button { appearance: none; }
 
 .k-esp-refresh-btn {
   flex: 0 0 auto;
-  min-height: 36px;
-  padding: 8px 14px;
+  min-height: 32px;
+  padding: 6px 12px;
   border: 1px solid rgba(54, 43, 31, 0.08);
   border-radius: 999px;
   background: rgba(255, 254, 250, 0.92);
@@ -618,8 +625,8 @@ button { appearance: none; }
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
-  padding: 0 12px;
+  min-height: 32px;
+  padding: 0 10px;
   border: 1px solid rgba(54, 43, 31, 0.08);
   border-radius: 999px;
   background: rgba(255, 254, 250, 0.92);
@@ -696,8 +703,8 @@ button { appearance: none; }
 /* Conversation pane */
 .k-conversation-pane {
   min-height: 0;
-  padding: 8px 0 6px;
-  border-radius: 24px;
+  padding: 6px 0;
+  border-radius: 20px;
   background:
     linear-gradient(180deg, rgba(244, 239, 231, 0.72), rgba(250, 247, 240, 0.78));
   border: 1px solid rgba(54, 43, 31, 0.05);
@@ -707,24 +714,24 @@ button { appearance: none; }
 .k-message-list {
   height: 100%;
   min-height: 0;
-  padding: 8px 12px 10px;
+  padding: 6px 10px 8px;
   overflow-y: auto;
   display: grid;
-  gap: 10px;
+  gap: 8px;
   align-content: start;
 }
 
 .k-message {
   max-width: min(76%, 700px);
-  padding: 14px 16px;
-  border-radius: 20px;
+  padding: 10px 13px;
+  border-radius: 16px;
 }
 
 .k-message p {
   margin: 0;
   white-space: pre-wrap;
-  font-size: 0.95rem;
-  line-height: 1.75;
+  font-size: 0.88rem;
+  line-height: 1.65;
 }
 
 .k-message-meta {
@@ -840,12 +847,12 @@ button { appearance: none; }
 
 .k-composer textarea {
   width: 100%;
-  min-height: 76px;
+  min-height: 62px;
   max-height: 18dvh;
   resize: vertical;
   border: 1px solid rgba(54, 43, 31, 0.08);
-  border-radius: 20px;
-  padding: 12px 14px;
+  border-radius: 16px;
+  padding: 10px 12px;
   background: rgba(255, 255, 255, 0.66);
   color: var(--text);
   outline: none;
@@ -859,7 +866,7 @@ button { appearance: none; }
 }
 
 .k-composer-footer {
-  margin-top: 8px;
+  margin-top: 6px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -873,10 +880,10 @@ button { appearance: none; }
 }
 
 .k-submit-btn {
-  min-width: 112px;
+  min-width: 100px;
   border: 0;
   border-radius: 999px;
-  padding: 11px 16px;
+  padding: 9px 14px;
   background: linear-gradient(180deg, #678f6e, #587f5c);
   color: white;
   cursor: pointer;
@@ -901,10 +908,10 @@ button { appearance: none; }
 .k-auth-card {
   position: relative;
   width: 100%;
-  max-width: 420px;
-  padding: 36px 32px 32px;
+  max-width: 380px;
+  padding: 28px 26px 26px;
   border: 1px solid var(--line);
-  border-radius: 26px;
+  border-radius: 22px;
   background: var(--paper-strong);
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -927,9 +934,9 @@ button { appearance: none; }
 }
 
 .k-auth-logo-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 16px;
+  width: 40px;
+  height: 40px;
+  border-radius: 13px;
   display: grid;
   place-items: center;
   background: linear-gradient(180deg, #678f6e, #587f5c);
@@ -937,7 +944,7 @@ button { appearance: none; }
   flex-shrink: 0;
 }
 
-.k-auth-logo-icon svg { width: 20px; height: 20px; }
+.k-auth-logo-icon svg { width: 18px; height: 18px; }
 
 .k-auth-logo-text {
   display: grid;
@@ -959,13 +966,13 @@ button { appearance: none; }
 
 .k-auth-card h1 {
   margin: 0 0 4px;
-  font-size: 1.45rem;
+  font-size: 1.25rem;
   font-weight: 500;
   letter-spacing: -0.02em;
 }
 
 .k-auth-card > p {
-  margin: 0 0 24px;
+  margin: 0 0 18px;
   color: var(--muted);
   font-size: 0.86rem;
 }
@@ -982,7 +989,7 @@ button { appearance: none; }
 }
 
 .k-auth-tab {
-  height: 38px;
+  height: 34px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -1105,7 +1112,7 @@ button { appearance: none; }
   align-items: center;
   justify-content: center;
   gap: 10px;
-  height: 44px;
+  height: 38px;
   width: 100%;
   border: 1px solid rgba(54, 43, 31, 0.12);
   border-radius: 999px;
@@ -1135,8 +1142,8 @@ button { appearance: none; }
 
 .k-input {
   width: 100%;
-  height: 44px;
-  padding: 0 14px;
+  height: 38px;
+  padding: 0 12px;
   border: 1px solid rgba(54, 43, 31, 0.1);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
@@ -1154,7 +1161,7 @@ button { appearance: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 44px;
+  height: 38px;
   width: 100%;
   border: 0;
   border-radius: 999px;
@@ -1173,7 +1180,7 @@ button { appearance: none; }
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 44px;
+  height: 38px;
   width: 100%;
   border: 1px solid rgba(54, 43, 31, 0.1);
   border-radius: 999px;
@@ -1229,10 +1236,10 @@ button { appearance: none; }
   position: relative;
   flex: 0 0 auto;
   width: 100%;
-  max-width: 560px;
-  padding: 36px 32px 32px;
+  max-width: 500px;
+  padding: 28px 26px 26px;
   border: 1px solid var(--line);
-  border-radius: 26px;
+  border-radius: 22px;
   background: var(--paper-strong);
   box-shadow: var(--shadow);
   overflow: hidden;
@@ -1249,24 +1256,24 @@ button { appearance: none; }
 
 .k-profile-card h2 {
   margin: 0 0 6px;
-  font-size: 1.3rem;
+  font-size: 1.12rem;
   font-weight: 500;
 }
 
 .k-profile-card > p {
   margin: 0 0 24px;
   color: var(--muted);
-  font-size: 0.88rem;
+  font-size: 0.82rem;
 }
 
 .k-textarea {
   width: 100%;
-  padding: 12px 14px;
+  padding: 10px 12px;
   border: 1px solid rgba(54, 43, 31, 0.1);
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
   color: var(--text);
-  font-size: 0.88rem;
+  font-size: 0.82rem;
   outline: none;
   resize: vertical;
   transition: border-color 180ms ease, box-shadow 180ms ease;
@@ -1300,18 +1307,25 @@ button { appearance: none; }
 
 /* ── Responsive ── */
 @media (max-width: 980px) {
-  .k-shell { padding: 10px 10px 12px; gap: 0; }
+  html { font-size: 14px; }
+  .k-shell {
+    height: 100svh;
+    min-height: 0;
+    padding: 6px 6px 8px;
+    gap: 0;
+    overflow: hidden;
+  }
   .k-hero {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
-    gap: 10px;
-    padding: 2px 2px 10px;
+    gap: 6px;
+    padding: 0 2px 6px;
   }
   .k-hero-copy .k-eyebrow,
   .k-hero-copy .k-hero-lead { display: none; }
   .k-hero h1 {
-    font-size: 1.15rem;
+    font-size: 1rem;
     line-height: 1.08;
     letter-spacing: -0.02em;
   }
@@ -1321,11 +1335,13 @@ button { appearance: none; }
     gap: 6px;
     min-width: 0;
   }
-  .k-status-pills { gap: 6px; }
+  .k-status-pills { gap: 4px; }
   .k-status-pill {
-    padding: 7px 10px;
-    font-size: 0.72rem;
+    gap: 5px;
+    padding: 5px 8px;
+    font-size: 0.66rem;
   }
+  .k-status-dot { width: 6px; height: 6px; }
   .k-status-meta { display: none; }
   .k-status-chip {
     min-height: 30px;
@@ -1339,37 +1355,185 @@ button { appearance: none; }
   }
   .k-mobile-menu-toggle { display: inline-flex; }
   .k-mobile-menu-backdrop { display: block; }
-  .k-chat { padding: 12px; }
-  .k-avatar { width: 36px; height: 36px; border-radius: 12px; }
-  .k-chat-title-block h2 { font-size: 0.96rem; }
-  .k-chat-subline { font-size: 0.68rem; }
-  .k-chat-header-side { gap: 8px; }
-  .k-chat-header { padding-bottom: 8px; align-items: flex-start; }
-  .k-chat { padding: 12px; }
-  .k-sensor-board { padding: 10px 10px 8px; }
-  .k-sensor-board-head { flex-direction: column; align-items: stretch; }
-  .k-sensor-board-summary { gap: 5px; }
-  .k-sensor-board-actions { justify-content: flex-start; }
-  .k-moisture-input-wrap { width: 100%; justify-content: space-between; }
-  .k-sensor-grid { gap: 6px; }
-  .k-esp-refresh-btn { width: 100%; }
-  .k-sensor-strip { padding: 8px 0 2px; }
-  .k-message { max-width: 94%; padding: 11px 12px; }
-  .k-message p { font-size: 0.86rem; line-height: 1.7; }
-  .k-message-list { padding: 6px 8px 8px; }
-  .k-prompt-row { padding: 6px 0; }
-  .k-prompt-chip { font-size: 0.72rem; padding: 6px 10px; border-radius: 12px; }
-  .k-composer { padding: 8px 0 0; background: transparent; }
-  .k-composer textarea { min-height: 84px; max-height: 22dvh; font-size: 0.88rem; }
-  .k-composer-footer { flex-direction: column; align-items: stretch; gap: 8px; }
-  .k-submit-btn { width: 100%; min-width: 0; box-shadow: none; }
+  .k-chat-layout {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+  }
+  .k-panel { border-radius: 16px; }
+  .k-chat {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    padding: 7px;
+    overflow: hidden;
+  }
+  .k-avatar,
+  .k-season-chip,
+  .k-chat-subline,
+  .k-chat-header-signal { display: none; }
+  .k-chat-title-block h2 { font-size: 0.9rem; }
+  .k-chat-header-side { display: none; }
+  .k-chat-header {
+    padding-bottom: 5px;
+    align-items: center;
+    gap: 6px;
+  }
+  .k-chat-title-block { min-width: 0; }
+  .k-chat-heading-copy { min-width: 0; }
+  .k-chat-title-block h2 {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .k-mobile-chat-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: auto;
+    flex: 0 0 auto;
+  }
+  .k-mobile-panel-toggle {
+    min-height: 26px;
+    padding: 4px 8px;
+    border: 1px solid rgba(54, 43, 31, 0.08);
+    border-radius: 999px;
+    background: rgba(255, 254, 250, 0.84);
+    color: #756f63;
+    font-size: 0.66rem;
+    line-height: 1;
+    box-shadow: var(--shadow-soft);
+  }
+  .k-mobile-panel-toggle-active {
+    border-color: rgba(88, 127, 92, 0.14);
+    background: rgba(229, 239, 227, 0.92);
+    color: #4f7253;
+  }
+  .k-mobile-info-panel {
+    display: none;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 32px;
+    margin-top: 4px;
+    padding: 4px 6px;
+    border: 1px solid rgba(54, 43, 31, 0.05);
+    border-radius: 12px;
+    background: rgba(255, 254, 250, 0.74);
+  }
+  .k-mobile-info-panel-open { display: flex; }
+  .k-mobile-info-panel p {
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    color: var(--muted);
+    font-size: 0.66rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .k-lang-switcher { gap: 5px; padding: 3px 5px; }
+  .k-lang-opt { font-size: 0.66rem; }
+  .k-lang-toggle { width: 34px; height: 20px; }
+  .k-lang-thumb { width: 16px; height: 16px; }
+  .k-lang-toggle-on .k-lang-thumb { transform: translateX(14px); }
+  .k-sensor-board {
+    display: none;
+    margin-top: 5px;
+    flex: 0 0 auto;
+    padding: 5px 6px;
+    border-radius: 12px;
+    overflow: visible;
+  }
+  .k-sensor-board-mobile-open { display: block; }
+  .k-sensor-board-head {
+    display: block;
+    min-height: 0;
+  }
+  .k-sensor-board-summary {
+    display: flex;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 5px;
+    min-height: 30px;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding: 1px 1px 2px;
+    scrollbar-width: none;
+  }
+  .k-sensor-board-summary::-webkit-scrollbar { display: none; }
+  .k-sensor-board-actions,
+  .k-moisture-control-error { display: none; }
+  .k-sensor-chip,
+  .k-sensor-chip-compact {
+    flex: 0 0 auto;
+    min-height: 26px;
+    padding: 4px 7px;
+    gap: 4px;
+    box-shadow: none;
+    line-height: 1;
+  }
+  .k-sensor-chip svg { width: 11px; height: 11px; }
+  .k-sensor-chip-label { font-size: 0.6rem; }
+  .k-sensor-chip-value { font-size: 0.66rem; }
+  .k-sensor-strip { padding: 4px 0 0; }
+  .k-conversation-pane {
+    flex: 1 1 auto;
+    margin-top: 4px;
+    min-height: 0;
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .k-message-list {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+  .k-message { max-width: 94%; padding: 9px 10px; }
+  .k-message p { font-size: 0.82rem; line-height: 1.62; }
+  .k-message-list { padding: 5px 7px 7px; }
+  .k-prompt-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding: 4px 0 2px;
+    scrollbar-width: none;
+  }
+  .k-prompt-row::-webkit-scrollbar { display: none; }
+  .k-prompt-chip { font-size: 0.64rem; padding: 4px 7px; border-radius: 10px; }
+  .k-composer {
+    flex: 0 0 auto;
+    padding: 5px 0 0;
+    background: transparent;
+  }
+  .k-composer textarea { min-height: 46px; max-height: 12dvh; font-size: 0.82rem; }
+  .k-composer-footer {
+    margin-top: 4px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px;
+  }
+  .k-composer-footer p {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.68rem;
+  }
+  .k-submit-btn {
+    width: auto;
+    min-width: 64px;
+    padding: 7px 10px;
+    box-shadow: none;
+    font-size: 0.78rem;
+  }
 }
 
 @media (max-height: 820px) {
   .k-profile-shell { padding-top: 4px; }
-  .k-profile-card { padding: 26px 28px 28px; }
-  .k-profile-card > p { margin-bottom: 16px; }
-  .k-profile-card .k-field { margin-bottom: 12px; }
-  .k-profile-card .k-textarea { min-height: 112px; }
-  .k-profile-card .k-field:nth-of-type(3) .k-textarea { min-height: 132px; }
+  .k-profile-card { padding: 22px 24px 24px; }
+  .k-profile-card > p { margin-bottom: 14px; }
+  .k-profile-card .k-field { margin-bottom: 10px; }
+  .k-profile-card .k-textarea { min-height: 96px; }
+  .k-profile-card .k-field:nth-of-type(3) .k-textarea { min-height: 112px; }
 }

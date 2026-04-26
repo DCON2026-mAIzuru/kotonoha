@@ -40,8 +40,8 @@ export function ProfileSetupForm({ token, onSaved, onCancel, initialName, initia
   return (
     <div className="k-profile-card">
       <p className="k-eyebrow" style={{ margin: '0 0 6px' }}>{onCancel ? 'プロフィール編集' : 'はじめての設定'}</p>
-      <h2 style={{ margin: '0 0 4px', fontSize: '1.3rem', fontWeight: 500, letterSpacing: '-0.02em' }}>盆栽のプロフィール</h2>
-      <p style={{ margin: '0 0 24px', color: 'var(--muted)', fontSize: '0.86rem' }}>名前と口調、来歴を決めると、返信スタイルに反映されます。</p>
+      <h2 style={{ margin: '0 0 4px', fontSize: '1.12rem', fontWeight: 500, letterSpacing: '-0.02em' }}>盆栽のプロフィール</h2>
+      <p style={{ margin: '0 0 18px', color: 'var(--muted)', fontSize: '0.82rem' }}>名前と口調、来歴を決めると、返信スタイルに反映されます。</p>
 
       <form onSubmit={onSubmit}>
         <div className="k-field">
@@ -70,7 +70,7 @@ export function ProfileSetupForm({ token, onSaved, onCancel, initialName, initia
           />
         </div>
 
-        <div className="k-field" style={{ marginBottom: 24 }}>
+        <div className="k-field" style={{ marginBottom: 18 }}>
           <label htmlFor="profile-backstory">来歴・昔の思い出</label>
           <textarea
             id="profile-backstory"
