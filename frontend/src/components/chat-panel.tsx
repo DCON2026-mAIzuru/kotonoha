@@ -88,6 +88,8 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   const [moistureDraft, setMoistureDraft] = useState('');
   const [moistureControlError, setMoistureControlError] = useState('');
   const [moistureControlSaving, setMoistureControlSaving] = useState(false);
+  const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
+  const [mobileSensorOpen, setMobileSensorOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
 
   const { messages, status, errorMessage, sendMessage } = useChatSocket(token, true);
@@ -324,9 +326,50 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
               <WifiMark />
             </div>
           </div>
+
+          <div className="k-mobile-chat-actions">
+            <button
+              type="button"
+              className={`k-mobile-panel-toggle${mobileInfoOpen ? ' k-mobile-panel-toggle-active' : ''}`}
+              onClick={() => setMobileInfoOpen((value) => !value)}
+              aria-expanded={mobileInfoOpen}
+            >
+              情報
+            </button>
+            <button
+              type="button"
+              className={`k-mobile-panel-toggle${mobileSensorOpen ? ' k-mobile-panel-toggle-active' : ''}`}
+              onClick={() => setMobileSensorOpen((value) => !value)}
+              aria-expanded={mobileSensorOpen}
+            >
+              センサー
+            </button>
+          </div>
         </header>
 
-        <section className="k-sensor-board">
+        <section className={`k-mobile-info-panel${mobileInfoOpen ? ' k-mobile-info-panel-open' : ''}`}>
+          <p>{bonsaiSpecies} ・ {now}</p>
+          <div className="k-lang-switcher">
+            <span className={`k-lang-opt${language === 'ja' ? ' k-lang-opt-active' : ''}`}>
+              日本語
+            </span>
+            <button
+              type="button"
+              className={`k-lang-toggle${language === 'en' ? ' k-lang-toggle-on' : ''}`}
+              role="switch"
+              aria-checked={language === 'en'}
+              aria-label="表示言語を切り替える"
+              onClick={() => setLanguage((l) => (l === 'ja' ? 'en' : 'ja'))}
+            >
+              <span className="k-lang-thumb" />
+            </button>
+            <span className={`k-lang-opt${language === 'en' ? ' k-lang-opt-active' : ''}`}>
+              English
+            </span>
+          </div>
+        </section>
+
+        <section className={`k-sensor-board${mobileSensorOpen ? ' k-sensor-board-mobile-open' : ''}`}>
           <div className="k-sensor-board-head">
             <div className="k-sensor-board-summary">
               <span className="k-sensor-chip k-sensor-chip-compact">

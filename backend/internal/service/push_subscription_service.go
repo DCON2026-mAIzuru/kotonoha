@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"strings"
 
@@ -14,6 +15,7 @@ type pushSubscriptionStore interface {
 	ListPushSubscriptionsByUserID(ctx context.Context, userID string) ([]models.PushSubscription, error)
 	UpsertPushSubscription(ctx context.Context, input models.UpsertPushSubscriptionInput) (*models.PushSubscription, error)
 	DeletePushSubscriptionByID(ctx context.Context, userID string, subscriptionID string) error
+	GetBonsaiProfileByUserID(ctx context.Context, userID string) (*models.BonsaiProfile, error)
 }
 
 type pushSubscriptionSender interface {
@@ -93,13 +95,19 @@ func (s *PushSubscriptionService) SendDemo(ctx context.Context, userID string) (
 		return nil, errors.New("Push購読が登録されていません")
 	}
 
+	profile, err := s.store.GetBonsaiProfileByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
 	result := &SendPushDemoResult{}
+	title, body, event := buildDemoPushNotification(profile)
 	payload := pushtransport.Payload{
-		Title:  "盆栽からのデモ通知",
-		Body:   "Push通知のデモです。設定が有効なら、このメッセージが届きます。",
+		Title:  title,
+		Body:   body,
 		Source: "push_demo",
-		Event:  "demo",
-		Tag:    "push-demo",
+		Event:  event,
+		Tag:    "push-demo-" + event,
 	}
 
 	for _, subscription := range subscriptions {
@@ -116,4 +124,16 @@ func (s *PushSubscriptionService) SendDemo(ctx context.Context, userID string) (
 	}
 
 	return result, nil
+}
+
+func buildDemoPushNotification(profile *models.BonsaiProfile) (string, string, string) {
+	name := "盆栽"
+	if profile != nil {
+		if trimmed := strings.TrimSpace(profile.Name); trimmed != "" {
+			name = trimmed
+		}
+	}
+
+	title := fmt.Sprintf("%s からのお知らせ", name)
+	return title, "お水が足りないぼんす。少しお水をくださいぼんす。", "demo_low_moisture"
 }

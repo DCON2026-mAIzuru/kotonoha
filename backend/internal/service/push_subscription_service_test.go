@@ -11,6 +11,7 @@ import (
 
 type pushSubscriptionServiceTestStore struct {
 	subscriptions []models.PushSubscription
+	profile       *models.BonsaiProfile
 }
 
 func (s *pushSubscriptionServiceTestStore) ListPushSubscriptionsByUserID(context.Context, string) ([]models.PushSubscription, error) {
@@ -23,6 +24,10 @@ func (s *pushSubscriptionServiceTestStore) UpsertPushSubscription(context.Contex
 
 func (s *pushSubscriptionServiceTestStore) DeletePushSubscriptionByID(context.Context, string, string) error {
 	return nil
+}
+
+func (s *pushSubscriptionServiceTestStore) GetBonsaiProfileByUserID(context.Context, string) (*models.BonsaiProfile, error) {
+	return s.profile, nil
 }
 
 type pushSubscriptionServiceTestSender struct {
@@ -88,5 +93,32 @@ func TestPushSubscriptionServiceSendDemoReturnsCounts(t *testing.T) {
 	}
 	if result.SentCount != 1 || result.FailedCount != 1 {
 		t.Fatalf("unexpected result: %+v", result)
+	}
+}
+
+func TestPushSubscriptionServiceSendDemoAlwaysSendsLowMoistureAlert(t *testing.T) {
+	t.Parallel()
+
+	sender := &pushSubscriptionServiceTestSender{enabled: true}
+	service := NewPushSubscriptionService(&pushSubscriptionServiceTestStore{
+		subscriptions: []models.PushSubscription{{ID: "sub-1"}},
+		profile:       &models.BonsaiProfile{Name: "小梅"},
+	}, sender)
+
+	result, err := service.SendDemo(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("SendDemo returned error: %v", err)
+	}
+	if result.SentCount != 1 || result.FailedCount != 0 {
+		t.Fatalf("unexpected result: %+v", result)
+	}
+	if sender.lastPayload.Title != "小梅 からのお知らせ" {
+		t.Fatalf("unexpected title: %q", sender.lastPayload.Title)
+	}
+	if sender.lastPayload.Event != "demo_low_moisture" {
+		t.Fatalf("unexpected event: %q", sender.lastPayload.Event)
+	}
+	if sender.lastPayload.Body != "お水が足りないぼんす。少しお水をくださいぼんす。" {
+		t.Fatalf("unexpected body: %q", sender.lastPayload.Body)
 	}
 }
