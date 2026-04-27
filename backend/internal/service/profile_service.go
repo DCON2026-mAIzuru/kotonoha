@@ -33,6 +33,7 @@ func (s *ProfileService) Upsert(ctx context.Context, input models.UpsertBonsaiPr
 	input.Name = strings.TrimSpace(input.Name)
 	input.Personality = strings.TrimSpace(input.Personality)
 	input.Backstory = strings.TrimSpace(input.Backstory)
+	input.ToneMode = normalizeToneMode(input.ToneMode)
 
 	switch {
 	case input.UserID == "":

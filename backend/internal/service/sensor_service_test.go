@@ -66,6 +66,13 @@ func (s *sensorServiceTestStore) CreateChatHistoryEntry(_ context.Context, input
 	}, nil
 }
 
+func (s *sensorServiceTestStore) UpdateBonsaiBondScore(_ context.Context, _ string, score int) (*models.BonsaiProfile, error) {
+	if s.profile != nil {
+		s.profile.BondScore = score
+	}
+	return s.profile, nil
+}
+
 type sensorServiceTestStreamer struct {
 	reply       string
 	lastRequest llm.ChatRequest

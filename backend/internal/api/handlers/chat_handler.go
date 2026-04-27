@@ -156,6 +156,23 @@ func (h *ChatHandler) Chat(c *gin.Context) {
 			continue
 		}
 
+		meta, err := h.chatService.PrepareStreamMeta(streamCtx, user.ID)
+		if err != nil {
+			_ = writeJSON(realtime.Message{
+				Type:    "error",
+				Message: err.Error(),
+				Source:  "chat",
+			})
+			continue
+		}
+		if err := writeJSON(realtime.Message{
+			Type:   "reply_start",
+			Source: "chat",
+			Typing: meta.Typing,
+		}); err != nil {
+			return
+		}
+
 		err = h.chatService.StreamReply(streamCtx, service.StreamChatInput{
 			UserID: user.ID,
 			Text:   request.Text,
