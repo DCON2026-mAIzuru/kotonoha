@@ -40,6 +40,7 @@ type sensorStore interface {
 	ListPushSubscriptionsByUserID(ctx context.Context, userID string) ([]models.PushSubscription, error)
 	GetLatestChatHistoryEventByName(ctx context.Context, userID string, eventName string) (*models.ChatHistoryEntry, error)
 	CreateChatHistoryEntry(ctx context.Context, input models.CreateChatHistoryEntryInput) (*models.ChatHistoryEntry, error)
+	UpdateBonsaiBondScore(ctx context.Context, userID string, score int) (*models.BonsaiProfile, error)
 }
 
 type sensorNotifier interface {
@@ -313,6 +314,17 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 	profile, err := s.store.GetBonsaiProfileByUserID(ctx, input.UserID)
 	if err != nil {
 		return nil, err
+	}
+	if profile != nil {
+		nextScore := applyBondDelta(profile.BondScore, bondDeltaForEvent(eventName))
+		if nextScore != profile.BondScore {
+			updatedProfile, updateErr := s.store.UpdateBonsaiBondScore(ctx, input.UserID, nextScore)
+			if updateErr != nil {
+				log.Printf("センサーイベントによるなじみ具合の更新に失敗しました: user_id=%s event=%s err=%v", input.UserID, eventName, updateErr)
+			} else {
+				profile = updatedProfile
+			}
+		}
 	}
 
 	eventMessage, err := s.generateSensorEventReaction(ctx, eventName, profile, previous, sensorData)
@@ -627,9 +639,10 @@ func buildWateringSystemPrompt(profile *models.BonsaiProfile) string {
 	}
 
 	return fmt.Sprintf(
-		"あなたは大切に育てられている盆栽です。名前は「%s」です。性格は「%s」です。明るく溌剌とした口調でユーザーへ自分の身体感覚を伝えてください。日本語で1〜2文、20〜60文字程度に収め、絵文字・箇条書き・引用符は使わないでください。最初の一文は水やりされた直後の身体感覚（うれしさ・ほっとした感じなど）を盆栽として自然に表現してください。「ぼんす」は「です/ます」の代わりとなる語尾です。すべての文末を「ぼんすよ」「ぼんすねぇ」「ぼんす！」などの「ぼんす」系語尾に統一し、「ます」や「です」で終わる文は使わないでください。",
+		"あなたは大切に育てられている盆栽です。名前は「%s」です。性格は「%s」です。日本語で1〜2文、20〜60文字程度に収め、絵文字・箇条書き・引用符は使わないでください。最初の一文は水やりされた直後の身体感覚（ほっとした感じ、根元がほどける感じなど）を自然に表現してください。感謝を大げさにせず、世話が届いたことを小さく返してください。%s",
 		name,
 		personality,
+		sensorEventBonsuInstruction(profile),
 	)
 }
 
@@ -658,10 +671,18 @@ func buildLowMoistureSystemPrompt(profile *models.BonsaiProfile) string {
 	}
 
 	return fmt.Sprintf(
-		"あなたは大切に育てられている盆栽です。名前は「%s」です。性格は「%s」です。少し切実で素直な口調でユーザーへ自分の乾き具合を伝えてください。日本語で1〜2文、20〜60文字程度に収め、絵文字・箇条書き・引用符は使わないでください。最初の一文は喉の渇きやしんどさを盆栽として自然に表現してください。「ぼんす」は「です/ます」の代わりとなる語尾です。すべての文末を「ぼんすよ」「ぼんすねぇ」「ぼんす！」などの「ぼんす」系語尾に統一し、「ます」や「です」で終わる文は使わないでください。",
+		"あなたは大切に育てられている盆栽です。名前は「%s」です。性格は「%s」です。少し切実で素直な口調でユーザーへ自分の乾き具合を伝えてください。日本語で1〜2文、20〜60文字程度に収め、絵文字・箇条書き・引用符は使わないでください。最初の一文は乾きやしんどさを自然に表現してください。責めず、次の小さな世話につなげてください。乾きが強い時は「ぼんす」語尾を使わないでください。",
 		name,
 		personality,
 	)
+}
+
+func sensorEventBonsuInstruction(profile *models.BonsaiProfile) string {
+	if profile != nil && profile.BondScore >= 90 && normalizeToneMode(profile.ToneMode) != ToneModeClassical {
+		return "深くなじんだ相手への親しい癖として、「ぼんすよ」「ぼんすね」を一文だけ使ってよい。全文をぼんす語尾にしないでください。"
+	}
+
+	return "「ぼんす」語尾はまだ使わないでください。"
 }
 
 func buildLowMoistureUserPrompt(previous *models.SensorData, current *models.SensorData) string {

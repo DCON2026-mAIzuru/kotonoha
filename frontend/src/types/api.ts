@@ -3,6 +3,9 @@ export interface BonsaiProfile {
   name: string;
   personality: string;
   backstory: string;
+  tone_mode: 'gentle' | 'childlike' | 'calm' | 'classical';
+  bond_score: number;
+  bond_updated_at: string;
   created_at: string;
   updated_at: string;
 }
@@ -11,6 +14,7 @@ export interface UpsertProfileInput {
   name: string;
   personality: string;
   backstory: string;
+  tone_mode?: 'gentle' | 'childlike' | 'calm' | 'classical';
 }
 
 export interface PushSubscriptionRecord {
@@ -54,10 +58,17 @@ export interface MoistureControl {
   updated_at?: string;
 }
 
+export interface TypingProfile {
+  delay_ms: number;
+  speed: 'slow' | 'normal' | 'fast';
+  bond_level: 'cautious' | 'aware' | 'familiar' | 'attached' | 'trusted';
+}
+
 export interface RealtimeMessage {
-  type: 'reply_chunk' | 'reply_done' | 'error';
+  type: 'reply_start' | 'reply_chunk' | 'reply_done' | 'error';
   text?: string;
   message?: string;
   source?: string;
   event?: string;
+  typing?: TypingProfile;
 }

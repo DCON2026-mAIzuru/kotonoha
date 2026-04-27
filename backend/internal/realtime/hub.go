@@ -12,6 +12,7 @@ type Message struct {
 	Message string `json:"message,omitempty"`
 	Source  string `json:"source,omitempty"`
 	Event   string `json:"event,omitempty"`
+	Typing  any    `json:"typing,omitempty"`
 }
 
 type senderFunc func(Message) error

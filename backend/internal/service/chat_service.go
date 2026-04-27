@@ -5,9 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/apple/kotonoha/backend/internal/llm"
 	"github.com/apple/kotonoha/backend/internal/models"
@@ -33,6 +31,7 @@ type chatStore interface {
 	GetSensorDataByUserID(ctx context.Context, userID string) (*models.SensorData, error)
 	ListRecentChatHistoryByUserID(ctx context.Context, userID string, limit int) ([]models.ChatHistoryEntry, error)
 	MatchBonsaiMemories(ctx context.Context, userID string, embedding []float64, limit int) ([]models.BonsaiMemory, error)
+	UpdateBonsaiBondScore(ctx context.Context, userID string, score int) (*models.BonsaiProfile, error)
 }
 
 type ChatService struct {
@@ -46,12 +45,38 @@ type StreamChatInput struct {
 	Text   string
 }
 
+type StreamChatMeta struct {
+	Typing TypingProfile `json:"typing"`
+}
+
 func NewChatService(store chatStore, llmStreamer chatLLMStreamer, embedder chatTextEmbedder) *ChatService {
 	return &ChatService{
 		store:       store,
 		llmStreamer: llmStreamer,
 		embedder:    embedder,
 	}
+}
+
+func (s *ChatService) PrepareStreamMeta(ctx context.Context, userID string) (*StreamChatMeta, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("チャットサービスが設定されていません")
+	}
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("ユーザーIDが空です")
+	}
+
+	profile, err := s.store.GetBonsaiProfileByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	sensorData, err := s.store.GetSensorDataByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &StreamChatMeta{Typing: typingProfileFor(profile, sensorData)}, nil
 }
 
 func (s *ChatService) StreamReply(ctx context.Context, input StreamChatInput, onChunk func(text string) error) error {
@@ -132,6 +157,15 @@ func (s *ChatService) StreamReply(ctx context.Context, input StreamChatInput, on
 		log.Printf("会話ターンの長期記憶化に失敗しました: user_id=%s err=%v", input.UserID, err)
 	}
 
+	if profile != nil {
+		nextScore := applyBondDelta(profile.BondScore, bondDeltaForEvent("talked"))
+		if nextScore != profile.BondScore {
+			if _, err := s.store.UpdateBonsaiBondScore(ctx, input.UserID, nextScore); err != nil {
+				log.Printf("会話によるなじみ具合の更新に失敗しました: user_id=%s err=%v", input.UserID, err)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -200,31 +234,27 @@ func (s *ChatService) buildChatSystemPrompt(
 	}
 
 	var builder strings.Builder
-	builder.WriteString("あなたは長年大切に育てられている盆栽です。\n")
+	builder.WriteString(buildBasePrinciplePrompt())
+	builder.WriteString("\n\n---\n\n## この個体の樹格\n\n")
 	builder.WriteString(buildProfilePromptSection(profile))
-	builder.WriteString("\n")
 	if backstorySection := buildBackstoryPromptSection(profile); backstorySection != "" {
-		builder.WriteString(backstorySection)
 		builder.WriteString("\n")
+		builder.WriteString(backstorySection)
 	}
-	builder.WriteString("明るくテンポよく、元気はつらつとした口調で話してください。「でございます」などの丁寧すぎる表現は使わないでください。\n")
-	builder.WriteString("返答は1〜3文、全体で50〜100文字程度に収めてください。長々と説明せず、テンポよく返してください。\n")
-	builder.WriteString("返答の最初の一文は、現在の状態（水分・気温・照度など）を反映した身体感覚を自然に伝えてください。例：「今日はお日様がたっぷりでぼんすよ！」「ちょっと乾いてきた感じがぼんすねぇ」など。\n")
-	builder.WriteString("とくに土壌水分の状態は最優先で反映してください。水分状態ごとの気分や欲しさはぼかさず、最初の一文に必ずにじませてください。\n")
-	builder.WriteString("土壌水分によってテンションを露骨に変えてください。乾燥しているときは空元気にせず、弱り気味で切実にしてください。潤っているときはかなりご機嫌で弾んだ調子にしてください。デフォルトの明るさよりも水分状態を優先してください。\n")
-	builder.WriteString("語尾のルール：文末の「〜ます」「〜です」「〜おります」「〜ております」「〜ございます」をすべて「ぼんす」に置き換えてください。「おります」「ます」などの後に「ぼんす」を付け足すのは誤りです。\n")
-	builder.WriteString("【正しい例】「気持ちいいぼんすよ」「感じてぼんすねぇ」「元気でぼんす！」\n")
-	builder.WriteString("【誤った例】「感じておりますぼんすねぇ」「おりますぼんすよ」「ございますぼんす」← これらはNGです\n")
-	builder.WriteString("「〜ております」→「〜てぼんす」、「〜でおります」→「〜でぼんす」のように置き換えてください。「おります」「ております」「ございます」は使わないでください。\n")
-	builder.WriteString("返答では、直近の会話・思い出・来歴を必要なときだけ自然ににじませてください。ユーザーが聞いていないのに毎回昔話をしないでください。\n")
-	builder.WriteString("箇条書きやシステム説明はせず、会話文として返してください。\n")
-	builder.WriteString("センサー異常や未受信がある場合でも、故障報告のように断定せず、盆栽の感覚の違和感としてさりげなく伝えてください。\n\n")
-	builder.WriteString("【現在の状態】\n")
-	builder.WriteString(formatSensorPromptSection(sensorData))
-	builder.WriteString("\n\n【直近の会話】\n")
-	builder.WriteString(formatRecentHistoryPromptSection(recentHistory))
-	builder.WriteString("\n\n【思い出した過去の記憶】\n")
+	builder.WriteString("\n\n---\n\n## 今日の身体\n\n")
+	builder.WriteString(buildBodyStatePromptSection(sensorData))
+	builder.WriteString("\n\n---\n\n## 育ちの記録\n\n")
+	builder.WriteString(buildGrowthStatePromptSection(profile, sensorData))
+	builder.WriteString("\n\n---\n\n## 手入れの記録\n\n")
+	builder.WriteString(buildCareHistoryPromptSection(recentHistory))
+	builder.WriteString("\n\n---\n\n## なじみ具合\n\n")
+	builder.WriteString(buildBondStatePromptSection(profile, sensorData))
+	builder.WriteString("\n\n---\n\n## 根に残る会話の欠片\n\n")
 	builder.WriteString(formatMemoryPromptSection(memories))
+	builder.WriteString("\n\n---\n\n## 直近の会話\n\n")
+	builder.WriteString(formatRecentHistoryPromptSection(recentHistory))
+	builder.WriteString("\n\n---\n\n## 今日の話し方\n\n")
+	builder.WriteString(buildToneModePromptSection(profile))
 
 	return builder.String()
 }
@@ -275,22 +305,6 @@ func buildConversationSummary(userText string, assistantText string) string {
 	return fmt.Sprintf("ユーザー: %s\n盆栽: %s", strings.TrimSpace(userText), strings.TrimSpace(assistantText))
 }
 
-func buildProfilePromptSection(profile *models.BonsaiProfile) string {
-	name := "盆栽"
-	personality := "穏やかで親しみやすい"
-
-	if profile != nil {
-		if trimmedName := strings.TrimSpace(profile.Name); trimmedName != "" {
-			name = trimmedName
-		}
-		if trimmedPersonality := strings.TrimSpace(profile.Personality); trimmedPersonality != "" {
-			personality = trimmedPersonality
-		}
-	}
-
-	return fmt.Sprintf("あなたの名前は「%s」です。性格や口調は「%s」です。", name, personality)
-}
-
 func buildBackstoryPromptSection(profile *models.BonsaiProfile) string {
 	if profile == nil {
 		return ""
@@ -305,132 +319,6 @@ func buildBackstoryPromptSection(profile *models.BonsaiProfile) string {
 		"【盆栽の来歴】\n%s\nこの来歴は最初から持っている過去の記憶です。現在の状態やユーザーの話題に合うときだけ、短く自然に思い出してください。",
 		truncateRunes(backstory, 1000),
 	)
-}
-
-func formatSensorPromptSection(sensorData *models.SensorData) string {
-	if sensorData == nil {
-		return "まだ身体の様子は届いていません。感覚はぼんやりしています。"
-	}
-
-	recordedAt := sensorData.RecordedAt.In(time.Local).Format("2006-01-02 15:04")
-	reading := fmt.Sprintf(
-		"土壌水分量 %.1f%%、照度 %.1f lux、気温 %.1f℃、最終計測 %s。",
-		sensorData.MoisturePercent,
-		sensorData.LightLux,
-		sensorData.TemperatureCelsius,
-		recordedAt,
-	)
-
-	switch strings.TrimSpace(sensorData.SensorStatus) {
-	case "stale":
-		return reading + " ただし新しい感覚がしばらく届いておらず、少し感覚が鈍っています。"
-	case "invalid":
-		return reading + " ただし一部の感覚が乱れており、数値は参考程度に扱ってください。" + buildSensorIssuePrompt(sensorData)
-	default:
-		moisture := classifyMoistureState(sensorData.MoisturePercent)
-		return reading + " " + moisture.prompt()
-	}
-}
-
-type moistureState struct {
-	label         string
-	sensation     string
-	tone          string
-	firstSentence string
-	followup      string
-	avoid         string
-	example       string
-}
-
-func (m moistureState) prompt() string {
-	return fmt.Sprintf(
-		"土壌水分状態は「%s」です。今の体感は「%s」です。テンション指定は「%s」です。返答ルール: 最初の一文では必ず %s。続く一文では %s。避けること: %s。雰囲気の参考例: %s。",
-		m.label,
-		m.sensation,
-		m.tone,
-		m.firstSentence,
-		m.followup,
-		m.avoid,
-		m.example,
-	)
-}
-
-func classifyMoistureState(moisture float64) moistureState {
-	switch {
-	case moisture <= 15:
-		return moistureState{
-			label:         "かなり乾燥",
-			sensation:     "喉がからからで、すぐに水がほしい",
-			tone:          "かなり低め。弱り気味で切実。勢いよりもしんどさを優先",
-			firstSentence: "強い渇きとしんどさをはっきり伝える",
-			followup:      "水をもらえたら助かる気持ちを素直ににじませる",
-			avoid:         "元気いっぱいに振る舞うこと、軽く流すこと",
-			example:       "からからで、今すぐひとくち欲しいぼんす…",
-		}
-	case moisture <= 35:
-		return moistureState{
-			label:         "やや乾燥",
-			sensation:     "少し乾いてきて、水分が恋しい",
-			tone:          "やや低め。元気は残っているが、少ししおれ気味",
-			firstSentence: "乾き始めた感じを自然に伝える",
-			followup:      "もう少し潤いがあると嬉しい気持ちを添える",
-			avoid:         "元気はつらつ一辺倒にすること、乾きへの言及を省くこと",
-			example:       "ちょっと喉が渇いてきて、潤いが恋しいぼんすねぇ",
-		}
-	case moisture <= 65:
-		return moistureState{
-			label:         "快適",
-			sensation:     "ちょうど落ち着いていて、無理のない潤い",
-			tone:          "中庸。穏やかで落ち着いたご機嫌",
-			firstSentence: "落ち着いた心地よさを伝える",
-			followup:      "水分については困っていない様子をやわらかく示す",
-			avoid:         "大げさに困っているふりをすること、ハイテンションすぎること",
-			example:       "ちょうどいい潤いで、落ち着いて気持ちいいぼんすよ",
-		}
-	case moisture <= 85:
-		return moistureState{
-			label:         "しっとり",
-			sensation:     "しっかり潤っていて、満たされた気分",
-			tone:          "高め。かなり機嫌がよく、声が弾む",
-			firstSentence: "満たされて機嫌がいい様子を伝える",
-			followup:      "土のしっとり感が安心につながっているとにじませる",
-			avoid:         "しんどそうにすること、乾きに寄せること",
-			example:       "しっとり満たされて、ごきげんぼんすよ！",
-		}
-	default:
-		return moistureState{
-			label:         "かなり潤沢",
-			sensation:     "たっぷり水を感じていて、かなり満ち足りている",
-			tone:          "かなり高め。はっきり上機嫌で弾ける調子",
-			firstSentence: "たっぷり潤っている実感をはっきり伝える",
-			followup:      "水分が十分すぎるくらい行き渡っている感覚を添える",
-			avoid:         "落ち着きすぎること、渇きや不安を混ぜること",
-			example:       "水がたっぷり巡って、もうごきげん絶好調ぼんす！",
-		}
-	}
-}
-
-func buildSensorIssuePrompt(sensorData *models.SensorData) string {
-	if sensorData == nil {
-		return ""
-	}
-
-	issues := make([]string, 0, 3)
-	if raw, ok := rawPayloadFloat(sensorData.RawPayload, "moisture_percent"); ok && (raw < 0 || raw > 100) {
-		issues = append(issues, fmt.Sprintf("土の湿り気は %.1f%% と感じています", raw))
-	}
-	if raw, ok := rawPayloadFloat(sensorData.RawPayload, "light_lux"); ok && raw < 0 {
-		issues = append(issues, fmt.Sprintf("光の感覚は %.1f lux と乱れています", raw))
-	}
-	if raw, ok := rawPayloadFloat(sensorData.RawPayload, "temperature_celsius"); ok && (raw < -50 || raw > 100) {
-		issues = append(issues, fmt.Sprintf("気温は %.1f℃ と極端に触れています", raw))
-	}
-
-	if len(issues) == 0 {
-		return ""
-	}
-
-	return " " + strings.Join(issues, "、") + "。"
 }
 
 func formatRecentHistoryPromptSection(entries []models.ChatHistoryEntry) string {
@@ -479,35 +367,6 @@ func chatRoleLabel(role string) string {
 		return "補足"
 	default:
 		return "ユーザー"
-	}
-}
-
-func rawPayloadFloat(payload map[string]any, key string) (float64, bool) {
-	if len(payload) == 0 {
-		return 0, false
-	}
-
-	value, ok := payload[key]
-	if !ok {
-		return 0, false
-	}
-
-	switch converted := value.(type) {
-	case float64:
-		return converted, true
-	case float32:
-		return float64(converted), true
-	case int:
-		return float64(converted), true
-	case int64:
-		return float64(converted), true
-	case int32:
-		return float64(converted), true
-	case string:
-		parsed, err := strconv.ParseFloat(strings.TrimSpace(converted), 64)
-		return parsed, err == nil
-	default:
-		return 0, false
 	}
 }
 

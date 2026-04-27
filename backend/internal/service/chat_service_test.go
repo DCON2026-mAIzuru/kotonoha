@@ -51,6 +51,13 @@ func (s *chatServiceTestStore) MatchBonsaiMemories(context.Context, string, []fl
 	return s.memories, nil
 }
 
+func (s *chatServiceTestStore) UpdateBonsaiBondScore(_ context.Context, _ string, score int) (*models.BonsaiProfile, error) {
+	if s.profile != nil {
+		s.profile.BondScore = score
+	}
+	return s.profile, nil
+}
+
 type chatServiceTestStreamer struct {
 	lastRequest llm.ChatRequest
 	reply       string
@@ -76,6 +83,8 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 			Name:        "言の葉",
 			Personality: "古風なおじいちゃん",
 			Backstory:   "前の持ち主は朝に水をくれる人だった。昔は別の庭で育っていた。",
+			ToneMode:    ToneModeGentle,
+			BondScore:   92,
 		},
 		sensorData: &models.SensorData{
 			UserID:             "user-1",
@@ -117,11 +126,14 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 		"古風なおじいちゃん",
 		"前の持ち主は朝に水をくれる人だった",
 		"昔は別の庭で育っていた",
-		"ユーザーが聞いていないのに毎回昔話をしないでください",
+		"## 今日の身体",
+		"## なじみ具合",
+		"bond_score: 92",
+		"ぼんす語尾",
 		"朝の光が気持ちいいです。",
 		"お水をもらえて助かりました。",
 		"先週は日当たりのよい窓辺に移してくれた",
-		"-127.0℃",
+		"身体の感覚に乱れがあり",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("system prompt does not contain %q\nprompt=%s", want, prompt)
@@ -139,7 +151,7 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 func TestFormatSensorPromptSectionIncludesMoistureState(t *testing.T) {
 	t.Parallel()
 
-	prompt := formatSensorPromptSection(&models.SensorData{
+	prompt := buildBodyStatePromptSection(&models.SensorData{
 		MoisturePercent:    12,
 		LightLux:           800,
 		TemperatureCelsius: 22,
@@ -148,10 +160,9 @@ func TestFormatSensorPromptSectionIncludesMoistureState(t *testing.T) {
 	})
 
 	for _, want := range []string{
-		"土壌水分状態は「かなり乾燥」です。",
-		"喉がからからで、すぐに水がほしい",
-		"テンション指定は「かなり低め。弱り気味で切実。勢いよりもしんどさを優先」です。",
-		"最初の一文では必ず 強い渇きとしんどさをはっきり伝える。",
+		"根元はかなり乾いていて",
+		"葉に届く光はやわらかい",
+		"鉢の温度は落ち着いている",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt does not contain %q\nprompt=%s", want, prompt)
@@ -162,7 +173,7 @@ func TestFormatSensorPromptSectionIncludesMoistureState(t *testing.T) {
 func TestFormatSensorPromptSectionIncludesHighTensionForWetState(t *testing.T) {
 	t.Parallel()
 
-	prompt := formatSensorPromptSection(&models.SensorData{
+	prompt := buildBodyStatePromptSection(&models.SensorData{
 		MoisturePercent:    92,
 		LightLux:           1400,
 		TemperatureCelsius: 24,
@@ -171,38 +182,11 @@ func TestFormatSensorPromptSectionIncludesHighTensionForWetState(t *testing.T) {
 	})
 
 	for _, want := range []string{
-		"土壌水分状態は「かなり潤沢」です。",
-		"テンション指定は「かなり高め。はっきり上機嫌で弾ける調子」です。",
-		"水がたっぷり巡って、もうごきげん絶好調ぼんす！",
+		"根元には水がたっぷり巡っていて",
+		"葉に届く光はやわらかい",
 	} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("prompt does not contain %q\nprompt=%s", want, prompt)
 		}
-	}
-}
-
-func TestClassifyMoistureStateBuckets(t *testing.T) {
-	t.Parallel()
-
-	tests := []struct {
-		moisture float64
-		want     string
-	}{
-		{moisture: 10, want: "かなり乾燥"},
-		{moisture: 30, want: "やや乾燥"},
-		{moisture: 50, want: "快適"},
-		{moisture: 80, want: "しっとり"},
-		{moisture: 95, want: "かなり潤沢"},
-	}
-
-	for _, tt := range tests {
-		tt := tt
-		t.Run(tt.want, func(t *testing.T) {
-			t.Parallel()
-			got := classifyMoistureState(tt.moisture)
-			if got.label != tt.want {
-				t.Fatalf("classifyMoistureState(%v) = %q, want %q", tt.moisture, got.label, tt.want)
-			}
-		})
 	}
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { ChatMessage, RealtimeMessage } from '@/types/api';
+import type { ChatMessage, RealtimeMessage, TypingProfile } from '@/types/api';
 import { getChatHistory } from '@/lib/backend-api';
 import { resolveWebSocketUrl } from '@/lib/ws-url';
 
@@ -36,6 +36,85 @@ export function useChatSocket(token: string, enabled: boolean) {
   const activeAssistantIdRef = useRef<string | null>(null);
   const activeEventIdRef = useRef<string | null>(null);
   const historyLoadedRef = useRef(false);
+  const assistantCharQueueRef = useRef<string[]>([]);
+  const assistantTypingReadyRef = useRef(true);
+  const assistantReplyDoneRef = useRef(false);
+  const assistantTypingTimerRef = useRef<number | null>(null);
+  const assistantTypingIntervalRef = useRef<number | null>(null);
+  const typingProfileRef = useRef<TypingProfile | null>(null);
+
+  const appendAssistantText = useCallback((text: string) => {
+    setMessages((current) => {
+      const activeId = activeAssistantIdRef.current;
+      if (!activeId) {
+        const newId = createId('assistant');
+        activeAssistantIdRef.current = newId;
+        return [...current, { id: newId, role: 'assistant', text }];
+      }
+
+      return current.map((item) => (item.id === activeId ? { ...item, text: item.text + text } : item));
+    });
+  }, []);
+
+  const typingIntervalMs = useCallback(() => {
+    switch (typingProfileRef.current?.speed) {
+      case 'slow':
+        return 52;
+      case 'fast':
+        return 18;
+      default:
+        return 32;
+    }
+  }, []);
+
+  const stopAssistantTypingInterval = useCallback(() => {
+    if (assistantTypingIntervalRef.current !== null) {
+      window.clearInterval(assistantTypingIntervalRef.current);
+      assistantTypingIntervalRef.current = null;
+    }
+  }, []);
+
+  const finishAssistantIfReady = useCallback(() => {
+    if (assistantReplyDoneRef.current && assistantCharQueueRef.current.length === 0) {
+      stopAssistantTypingInterval();
+      activeAssistantIdRef.current = null;
+      assistantReplyDoneRef.current = false;
+      typingProfileRef.current = null;
+    }
+  }, [stopAssistantTypingInterval]);
+
+  const startAssistantTypingLoop = useCallback(() => {
+    if (!assistantTypingReadyRef.current || assistantTypingIntervalRef.current !== null) {
+      return;
+    }
+
+    assistantTypingIntervalRef.current = window.setInterval(() => {
+      const next = assistantCharQueueRef.current.shift();
+      if (next) {
+        appendAssistantText(next);
+        return;
+      }
+
+      finishAssistantIfReady();
+    }, typingIntervalMs());
+  }, [appendAssistantText, finishAssistantIfReady, typingIntervalMs]);
+
+  const enqueueAssistantChunk = useCallback((chunk: string) => {
+    assistantCharQueueRef.current.push(...Array.from(chunk));
+    startAssistantTypingLoop();
+  }, [startAssistantTypingLoop]);
+
+  const resetAssistantTyping = useCallback(() => {
+    if (assistantTypingTimerRef.current !== null) {
+      window.clearTimeout(assistantTypingTimerRef.current);
+      assistantTypingTimerRef.current = null;
+    }
+    stopAssistantTypingInterval();
+    assistantCharQueueRef.current = [];
+    assistantTypingReadyRef.current = true;
+    assistantReplyDoneRef.current = false;
+    typingProfileRef.current = null;
+  }, [stopAssistantTypingInterval]);
 
   const appendChunk = useCallback((role: 'assistant' | 'event', chunk: string) => {
     const activeIdRef = role === 'assistant' ? activeAssistantIdRef : activeEventIdRef;
@@ -128,17 +207,41 @@ export function useChatSocket(token: string, enabled: boolean) {
           appendChunk('event', payload.text);
           return;
         }
-        appendChunk('assistant', payload.text);
+        enqueueAssistantChunk(payload.text);
+        return;
+      }
+
+      if (payload.type === 'reply_start') {
+        if (payload.source === 'sensor_event') {
+          return;
+        }
+        typingProfileRef.current = payload.typing ?? null;
+        assistantTypingReadyRef.current = false;
+        assistantReplyDoneRef.current = false;
+        if (assistantTypingTimerRef.current !== null) {
+          window.clearTimeout(assistantTypingTimerRef.current);
+        }
+        assistantTypingTimerRef.current = window.setTimeout(() => {
+          assistantTypingReadyRef.current = true;
+          assistantTypingTimerRef.current = null;
+          startAssistantTypingLoop();
+        }, Math.max(payload.typing?.delay_ms ?? 0, 0));
         return;
       }
 
       if (payload.type === 'reply_done') {
-        activeAssistantIdRef.current = null;
+        if (payload.source === 'sensor_event') {
+          activeEventIdRef.current = null;
+          return;
+        }
+        assistantReplyDoneRef.current = true;
+        finishAssistantIfReady();
         activeEventIdRef.current = null;
         return;
       }
 
       if (payload.type === 'error') {
+        resetAssistantTyping();
         activeAssistantIdRef.current = null;
         activeEventIdRef.current = null;
         // 空のプレースホルダーを除去してからエラーメッセージを追加
@@ -152,7 +255,7 @@ export function useChatSocket(token: string, enabled: boolean) {
         ]);
       }
     };
-  }, [apiBaseUrl, appendChunk, enabled, token, wsUrl]);
+  }, [apiBaseUrl, appendChunk, enabled, enqueueAssistantChunk, finishAssistantIfReady, resetAssistantTyping, startAssistantTypingLoop, token, wsUrl]);
 
   useEffect(() => {
     if (!enabled || !token || historyLoadedRef.current) return;
@@ -174,10 +277,11 @@ export function useChatSocket(token: string, enabled: boolean) {
     connect();
 
     return () => {
+      resetAssistantTyping();
       socketRef.current?.close();
       socketRef.current = null;
     };
-  }, [connect]);
+  }, [connect, resetAssistantTyping]);
 
   const sendMessage = useCallback((text: string) => {
     const socket = socketRef.current;
@@ -190,6 +294,7 @@ export function useChatSocket(token: string, enabled: boolean) {
     const pendingId = createId('assistant');
     activeAssistantIdRef.current = pendingId;
     activeEventIdRef.current = null;
+    resetAssistantTyping();
 
     setMessages((current) => [
       ...current,
@@ -205,13 +310,14 @@ export function useChatSocket(token: string, enabled: boolean) {
     );
 
     return true;
-  }, []);
+  }, [resetAssistantTyping]);
 
   const clearMessages = useCallback(() => {
     setMessages([]);
+    resetAssistantTyping();
     activeAssistantIdRef.current = null;
     activeEventIdRef.current = null;
-  }, []);
+  }, [resetAssistantTyping]);
 
   return useMemo(
     () => ({
