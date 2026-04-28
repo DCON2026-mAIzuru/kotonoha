@@ -20,6 +20,7 @@ export function KotonohaApp() {
   const [showPush, setShowPush] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [chatResetKey, setChatResetKey] = useState(0);
 
   useEffect(() => {
     if (!showMobileMenu) {
@@ -308,7 +309,9 @@ export function KotonohaApp() {
               initialName={profile.name}
               initialPersonality={profile.personality}
               initialBackstory={profile.backstory}
+              initialBondScore={profile.bond_score}
               onSaved={(updated) => { setProfile(updated); closeEditProfile(); }}
+              onHistoryCleared={() => setChatResetKey((value) => value + 1)}
               onCancel={closeEditProfile}
             />
           </div>
@@ -335,6 +338,7 @@ export function KotonohaApp() {
       {/* Chat panel – takes the remaining height */}
       <main className="k-chat-layout">
         <ChatPanel
+          key={chatResetKey}
           token={auth.accessToken}
           bonsaiName={profile.name}
           bonsaiSpecies={profile.personality}

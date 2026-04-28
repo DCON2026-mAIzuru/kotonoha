@@ -49,6 +49,17 @@ export async function getChatHistory(token: string, limit = 50): Promise<ChatHis
   return payload.history ?? [];
 }
 
+export async function clearChatHistory(
+  token: string,
+): Promise<{ deleted_history_count: number; deleted_memory_count: number }> {
+  const payload = await authFetch<{
+    result: { deleted_history_count: number; deleted_memory_count: number };
+  }>(token, '/api/v1/chat/history', {
+    method: 'DELETE',
+  });
+  return payload.result;
+}
+
 export async function getCurrentSensorData(token: string): Promise<SensorData | null> {
   const payload = await authFetch<{ sensor_data: SensorData | null }>(token, '/api/v1/sensor');
   return payload.sensor_data;

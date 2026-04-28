@@ -103,6 +103,16 @@ go mod tidy
 go run ./cmd/server
 ```
 
+ホットリロードを使う場合:
+
+```bash
+cd backend
+go install github.com/air-verse/air@latest
+air
+```
+
+`backend/.air.toml` が `cmd/server` を監視・再ビルドします。`internal/prompts/*.md` も監視対象なので、実行用プロンプトを編集した場合も自動で再起動されます。
+
 起動後の確認:
 
 - GET /healthz
