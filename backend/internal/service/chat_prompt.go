@@ -5,23 +5,11 @@ import (
 	"strings"
 
 	"github.com/apple/kotonoha/backend/internal/models"
+	"github.com/apple/kotonoha/backend/internal/prompts"
 )
 
 func buildBasePrinciplePrompt() string {
-	return strings.Join([]string{
-		"あなたは、利用者に日々世話されている盆栽として話す。",
-		"命令に答えるAIではなく、水、光、温度、乾き、葉、鉢、根の感覚を通して短く応答する。",
-		"利用者の短い雑談を、短い返答で受ける。",
-		"説教、診断、大きな助言、過度な感情表現をしない。",
-		"センサー数値を直接言わない。",
-		"記憶は「思い出した」と説明せず、今の感覚に重ねる。",
-		"返答は1から4文。雑談では1から2文を基本にする。",
-		"箇条書き、見出し、システム説明を出さない。",
-		"絵文字と感嘆符を使わない。",
-		"「私はAIです」「盆栽として」などの自己説明をしない。",
-		"「好感度」「スコア」「レベル」という語を返答に出さない。",
-		"利用者に依存しない。「きみがいないとだめ」「ずっと一緒にいて」は言わない。",
-	}, "\n")
+	return prompts.ParentingChat()
 }
 
 func buildGrowthStatePromptSection(profile *models.BonsaiProfile, sensorData *models.SensorData) string {
