@@ -130,3 +130,17 @@ func (s *PostgresStore) ListRecentChatHistoryByUserID(ctx context.Context, userI
 
 	return entries, nil
 }
+
+func (s *PostgresStore) DeleteChatHistoryByUserID(ctx context.Context, userID string) (int64, error) {
+	const query = `
+		delete from public.chat_history
+		where user_id = $1
+	`
+
+	tag, err := s.pool.Exec(ctx, query, userID)
+	if err != nil {
+		return 0, fmt.Errorf("会話履歴の削除に失敗しました: %w", err)
+	}
+
+	return tag.RowsAffected(), nil
+}

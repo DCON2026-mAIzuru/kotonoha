@@ -71,6 +71,22 @@ func (h *ChatHandler) History(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"history": entries})
 }
 
+func (h *ChatHandler) ClearHistory(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "認証ユーザーが見つかりません"})
+		return
+	}
+
+	result, err := h.chatService.ClearHistory(c.Request.Context(), user.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"result": result})
+}
+
 func (h *ChatHandler) Chat(c *gin.Context) {
 	user, ok := middleware.CurrentUser(c)
 	if !ok {

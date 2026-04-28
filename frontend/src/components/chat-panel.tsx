@@ -478,10 +478,10 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
               <article className="k-message k-message-assistant">
                 <div className="k-message-meta">{bonsaiName}</div>
                 <p>
-                  {language === 'ja'
-                    ? `こんにちは〜！今日も元気でぼんすよ！\n根っこでしっかり大地をつかんで、枝もぐんぐん伸びてぼんす。\nうれしいこと、気になること、なんでも話しかけてぼんすねぇ〜！`
-                    : `Hey there! Feeling great today!\nRoots gripping strong, branches reaching high — growing every day!\nTell me what's on your mind. I'm all ears (and leaves)!`}
-                </p>
+	                  {language === 'ja'
+	                    ? `こんにちは。鉢のそばで、静かに聞いているよ。\n水や光のことでも、今日あったことでも、少しずつ覚えていくね。`
+	                    : `Hello. I am here quietly beside the pot.\nYou can tell me about water, light, or anything from your day. I will learn little by little.`}
+	                </p>
               </article>
             )}
 

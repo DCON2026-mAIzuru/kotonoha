@@ -35,6 +35,14 @@ func (s *chatServiceTestStore) CreateBonsaiMemory(_ context.Context, input model
 	return nil
 }
 
+func (s *chatServiceTestStore) DeleteBonsaiMemoriesByUserID(context.Context, string) (int64, error) {
+	return int64(len(s.createdMemories)), nil
+}
+
+func (s *chatServiceTestStore) DeleteChatHistoryByUserID(context.Context, string) (int64, error) {
+	return int64(len(s.createdHistory)), nil
+}
+
 func (s *chatServiceTestStore) GetBonsaiProfileByUserID(context.Context, string) (*models.BonsaiProfile, error) {
 	return s.profile, nil
 }

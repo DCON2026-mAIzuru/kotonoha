@@ -27,6 +27,8 @@ type chatTextEmbedder interface {
 type chatStore interface {
 	CreateChatHistoryEntry(ctx context.Context, input models.CreateChatHistoryEntryInput) (*models.ChatHistoryEntry, error)
 	CreateBonsaiMemory(ctx context.Context, input models.CreateBonsaiMemoryInput) error
+	DeleteBonsaiMemoriesByUserID(ctx context.Context, userID string) (int64, error)
+	DeleteChatHistoryByUserID(ctx context.Context, userID string) (int64, error)
 	GetBonsaiProfileByUserID(ctx context.Context, userID string) (*models.BonsaiProfile, error)
 	GetSensorDataByUserID(ctx context.Context, userID string) (*models.SensorData, error)
 	ListRecentChatHistoryByUserID(ctx context.Context, userID string, limit int) ([]models.ChatHistoryEntry, error)
@@ -47,6 +49,11 @@ type StreamChatInput struct {
 
 type StreamChatMeta struct {
 	Typing TypingProfile `json:"typing"`
+}
+
+type ClearChatHistoryResult struct {
+	DeletedHistoryCount int64 `json:"deleted_history_count"`
+	DeletedMemoryCount  int64 `json:"deleted_memory_count"`
 }
 
 func NewChatService(store chatStore, llmStreamer chatLLMStreamer, embedder chatTextEmbedder) *ChatService {
@@ -184,6 +191,32 @@ func (s *ChatService) ListHistory(ctx context.Context, userID string, limit int)
 	}
 
 	return s.store.ListRecentChatHistoryByUserID(ctx, userID, limit)
+}
+
+func (s *ChatService) ClearHistory(ctx context.Context, userID string) (*ClearChatHistoryResult, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("チャットサービスが設定されていません")
+	}
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("ユーザーIDが空です")
+	}
+
+	deletedHistory, err := s.store.DeleteChatHistoryByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	deletedMemories, err := s.store.DeleteBonsaiMemoriesByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &ClearChatHistoryResult{
+		DeletedHistoryCount: deletedHistory,
+		DeletedMemoryCount:  deletedMemories,
+	}, nil
 }
 
 func (s *ChatService) SearchRelevantMemories(ctx context.Context, userID string, query string, limit int) ([]models.BonsaiMemory, error) {

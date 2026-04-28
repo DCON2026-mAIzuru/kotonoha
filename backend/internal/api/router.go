@@ -70,6 +70,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		chatRoutes := apiV1.Group("/chat")
 		chatRoutes.Use(authMiddleware)
 		chatRoutes.GET("/history", chatHandler.History)
+		chatRoutes.DELETE("/history", chatHandler.ClearHistory)
 
 		sensorRoutes := apiV1.Group("/sensor")
 		sensorRoutes.Use(authMiddleware)

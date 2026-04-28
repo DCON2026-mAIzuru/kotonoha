@@ -76,6 +76,20 @@ func (s *PostgresStore) MatchBonsaiMemories(ctx context.Context, userID string, 
 	return memories, nil
 }
 
+func (s *PostgresStore) DeleteBonsaiMemoriesByUserID(ctx context.Context, userID string) (int64, error) {
+	const query = `
+		delete from public.bonsai_memories
+		where user_id = $1
+	`
+
+	tag, err := s.pool.Exec(ctx, query, userID)
+	if err != nil {
+		return 0, fmt.Errorf("長期記憶の削除に失敗しました: %w", err)
+	}
+
+	return tag.RowsAffected(), nil
+}
+
 func formatVector(values []float64) string {
 	if len(values) == 0 {
 		return "[]"
