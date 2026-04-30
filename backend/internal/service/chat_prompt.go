@@ -81,16 +81,85 @@ func buildToneModePromptSection(profile *models.BonsaiProfile) string {
 
 func buildProfilePromptSection(profile *models.BonsaiProfile) string {
 	name := "盆栽"
-	personality := "穏やかで親しみやすい"
 
 	if profile != nil {
 		if trimmedName := strings.TrimSpace(profile.Name); trimmedName != "" {
 			name = trimmedName
 		}
-		if trimmedPersonality := strings.TrimSpace(profile.Personality); trimmedPersonality != "" {
-			personality = trimmedPersonality
-		}
 	}
 
-	return fmt.Sprintf("名前は「%s」。性格や口調の初期設定は「%s」。ただし、現在の身体、なじみ具合、今日の話し方を優先して自然に調整する。", name, personality)
+	return fmt.Sprintf(`名前は「%s」。
+bonsai_dna:
+  time_sense: morning_sensitive
+  trust_pattern: slow_to_trust
+  care_response: calms_before_rejoices
+  memory_style: remembers_rhythm_not_details
+  stress_response: becomes_quiet
+  growth_style: small_visible_changes
+  distance_boundary: companion_not_dependent
+
+DNAは発話の定型ではなく、反応の傾向として使う。bond_score や bond_level はDNAに入れず、現在の距離感は後続のなじみ具合で判断する。`, name)
+}
+
+func buildPersonalityStatePromptSection(profile *models.BonsaiProfile, sensorData *models.SensorData) string {
+	customPersonality := "穏やかで親しみやすい"
+	score := 20
+	if profile != nil {
+		if trimmedPersonality := strings.TrimSpace(profile.Personality); trimmedPersonality != "" {
+			customPersonality = trimmedPersonality
+		}
+		score = profile.BondScore
+	}
+
+	level := bondLevelFromScore(score)
+	tone := buildToneModePromptSection(profile)
+
+	responseLength := "short_to_medium"
+	questionTendency := "occasional"
+	affectionStyle := "restrained_warmth"
+	stressSurface := "normal"
+	if sensorData != nil && (sensorData.SensorStatus != sensorStatusNormal || sensorData.MoisturePercent <= 20 || sensorData.TemperatureCelsius < 8 || sensorData.TemperatureCelsius > 32) {
+		responseLength = "short"
+		questionTendency = "rare"
+		affectionStyle = "quieter_warmth"
+		stressSurface = "quieter_and_more_direct"
+	}
+
+	bondEffect := "距離を保ち、記憶や親しみは控えめに出す。"
+	switch level {
+	case BondLevelAware:
+		bondEffect = "声や手入れを覚え始めるが、反応はまだ控えめにする。"
+	case BondLevelFamiliar:
+		bondEffect = "日常の相手として自然に返し、軽い問い返しをしてよい。"
+	case BondLevelAttached:
+		bondEffect = "語尾を少し柔らかくし、世話への反応を素直に出してよい。"
+	case BondLevelTrusted:
+		bondEffect = "古い記憶や育ちの変化を短く出してよい。ただし依存しない。"
+	}
+
+	return fmt.Sprintf(`personality_state:
+  custom_personality_hint: %s
+  bond_state:
+    bond_score: %d
+    bond_level: %s
+    surface_effect: %s
+  speaking_tone: %s
+  response_length: %s
+  question_tendency: %s
+  affection_style: %s
+  humor_response: lightly_accepts
+  silence_style: comfortable_pause
+  stress_surface: %s
+
+性格はDNAの核を壊さず、今日の身体となじみ具合に合わせて表面だけを調整する。設定値や項目名は返答に出さない。`,
+		customPersonality,
+		clampBondScore(score),
+		level,
+		bondEffect,
+		tone,
+		responseLength,
+		questionTendency,
+		affectionStyle,
+		stressSurface,
+	)
 }

@@ -132,6 +132,11 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 	for _, want := range []string{
 		"言の葉",
 		"古風なおじいちゃん",
+		"bonsai_dna:",
+		"trust_pattern: slow_to_trust",
+		"## 今日の性格の出方",
+		"personality_state:",
+		"custom_personality_hint: 古風なおじいちゃん",
 		"前の持ち主は朝に水をくれる人だった",
 		"昔は別の庭で育っていた",
 		"## 今日の身体",
