@@ -107,7 +107,7 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 			},
 		},
 		recentHistory: []models.ChatHistoryEntry{
-			{Role: "assistant", Content: "朝の光が気持ちいいです。"},
+			{Role: "assistant", Content: "根元は少し静かです。"},
 			{Role: "event", Content: "お水をもらえて助かりました。"},
 		},
 		memories: []models.BonsaiMemory{
@@ -132,13 +132,24 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 	for _, want := range []string{
 		"言の葉",
 		"古風なおじいちゃん",
+		"bonsai_dna:",
+		"trust_pattern: slow_to_trust",
+		"## 今日の性格の出方",
+		"personality_state:",
+		"custom_personality_hint: 古風なおじいちゃん",
+		"## 会話の見立て",
+		"conversation_intent: question",
+		"relationship_phase: early_contact",
+		"直近で使いすぎている表現:",
+		"- 少し",
+		"- 根元",
 		"前の持ち主は朝に水をくれる人だった",
 		"昔は別の庭で育っていた",
 		"## 今日の身体",
 		"## なじみ具合",
 		"bond_score: 92",
 		"ぼんす語尾",
-		"朝の光が気持ちいいです。",
+		"根元は少し静かです。",
 		"お水をもらえて助かりました。",
 		"先週は日当たりのよい窓辺に移してくれた",
 		"身体の感覚に乱れがあり",
@@ -153,6 +164,46 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 	}
 	if len(store.createdMemories) != 1 {
 		t.Fatalf("expected 1 archived memory, got %d", len(store.createdMemories))
+	}
+}
+
+func TestBuildConversationContextPromptSection(t *testing.T) {
+	t.Parallel()
+
+	prompt := buildConversationContextPromptSection("ただいま。今日つかれた", []models.ChatHistoryEntry{
+		{Role: "assistant", Content: "根元は少し静かだよ。"},
+		{Role: "user", Content: "おはよう"},
+		{Role: "assistant", Content: "葉の先が少し起きた。"},
+	})
+
+	for _, want := range []string{
+		"conversation_intent: user_low_energy",
+		"relationship_phase: ongoing",
+		"直近で使いすぎている表現:",
+		"- 少し",
+		"- 根元",
+		"- 葉の先",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt does not contain %q\nprompt=%s", want, prompt)
+		}
+	}
+}
+
+func TestBuildConversationContextPromptSectionFirstContact(t *testing.T) {
+	t.Parallel()
+
+	prompt := buildConversationContextPromptSection("今日カレー食べた", nil)
+
+	for _, want := range []string{
+		"conversation_intent: light_chat",
+		"relationship_phase: first_contact",
+		"初回として扱う",
+		"直近で強く避けるべき繰り返し表現はない",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt does not contain %q\nprompt=%s", want, prompt)
+		}
 	}
 }
 
