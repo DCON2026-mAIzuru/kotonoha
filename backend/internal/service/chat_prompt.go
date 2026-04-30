@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/apple/kotonoha/backend/internal/models"
 	"github.com/apple/kotonoha/backend/internal/prompts"
@@ -162,4 +163,165 @@ func buildPersonalityStatePromptSection(profile *models.BonsaiProfile, sensorDat
 		affectionStyle,
 		stressSurface,
 	)
+}
+
+func buildConversationContextPromptSection(userMessage string, recentHistory []models.ChatHistoryEntry) string {
+	intent := classifyConversationIntent(userMessage)
+	phase := relationshipPhaseFromHistory(recentHistory)
+	overused := overusedAssistantExpressions(recentHistory)
+
+	var builder strings.Builder
+	builder.WriteString("conversation_intent: ")
+	builder.WriteString(intent)
+	builder.WriteString("\nrelationship_phase: ")
+	builder.WriteString(phase)
+	builder.WriteString("\n")
+	builder.WriteString(conversationIntentGuidance(intent))
+	builder.WriteString("\n")
+	builder.WriteString(relationshipPhaseGuidance(phase))
+
+	if len(overused) > 0 {
+		builder.WriteString("\n直近で使いすぎている表現:\n")
+		for _, expression := range overused {
+			builder.WriteString("- ")
+			builder.WriteString(expression)
+			builder.WriteString("\n")
+		}
+		builder.WriteString("上の表現は今回できるだけ避ける。同じ身体感覚が必要な場合も、別の言い方にする。")
+	} else {
+		builder.WriteString("\n直近で強く避けるべき繰り返し表現はない。")
+	}
+
+	return strings.TrimSpace(builder.String())
+}
+
+func classifyConversationIntent(message string) string {
+	normalized := strings.ToLower(strings.TrimSpace(message))
+	if normalized == "" {
+		return "unknown"
+	}
+
+	if containsAny(normalized, []string{"水", "みず", "あげる", "あげた", "やった", "置く", "移動", "日当たり", "光", "剪定", "葉水", "肥料", "植え替え"}) {
+		return "care_action"
+	}
+	if containsAny(normalized, []string{"乾い", "枯れ", "しおれ", "元気ない", "大丈夫", "寒", "暑", "強すぎ", "弱って", "調子悪"}) {
+		return "condition_check"
+	}
+	if containsAny(normalized, []string{"疲れ", "つかれ", "しんど", "眠い", "ねむい", "つらい", "かなしい", "悲しい", "不安", "こわい", "怖い"}) {
+		return "user_low_energy"
+	}
+	if containsAny(normalized, []string{"うれしい", "嬉しい", "できた", "受かった", "成功", "よかった", "楽しかった", "たのしかった"}) {
+		return "user_good_news"
+	}
+	if containsAny(normalized, []string{"おはよう", "こんにちは", "こんばんは", "ただいま", "おやすみ", "hello", "hi"}) {
+		return "greeting"
+	}
+	if strings.HasSuffix(normalized, "?") || strings.HasSuffix(normalized, "？") || containsAny(normalized, []string{"どう", "なに", "何", "かな", "？"}) {
+		return "question"
+	}
+	if utf8.RuneCountInString(normalized) <= 12 {
+		return "light_chat"
+	}
+
+	return "daily_chat"
+}
+
+func conversationIntentGuidance(intent string) string {
+	switch intent {
+	case "greeting":
+		return "意図への方針: 挨拶として短く受ける。必要がなければ深い話に広げない。"
+	case "care_action":
+		return "意図への方針: 世話への反応を小さく返す。採点せず、身体の変化を一つだけ混ぜてよい。"
+	case "condition_check":
+		return "意図への方針: 状態を断定しすぎず、今できる小さな世話へつなげる。"
+	case "user_low_energy":
+		return "意図への方針: 助言を大きくせず、静かに受ける。質問で追い込みすぎない。"
+	case "user_good_news":
+		return "意図への方針: 短く受け止める。大げさに褒めず、声や場の明るさとして返してよい。"
+	case "question":
+		return "意図への方針: 質問に答える。盆栽らしい比喩で回避しすぎない。"
+	case "light_chat":
+		return "意図への方針: 軽い雑談として受ける。植物比喩を必ず入れなくてよい。"
+	default:
+		return "意図への方針: 日常会話として自然に受ける。必要以上に詩的にしない。"
+	}
+}
+
+func relationshipPhaseFromHistory(entries []models.ChatHistoryEntry) string {
+	conversationTurns := 0
+	for _, entry := range entries {
+		switch strings.TrimSpace(entry.Role) {
+		case "user", "assistant":
+			conversationTurns++
+		}
+	}
+
+	switch {
+	case conversationTurns == 0:
+		return "first_contact"
+	case conversationTurns <= 2:
+		return "early_contact"
+	default:
+		return "ongoing"
+	}
+}
+
+func relationshipPhaseGuidance(phase string) string {
+	switch phase {
+	case "first_contact":
+		return "関係フェーズへの方針: 初回として扱う。「慣れてきた」「前より」など継続前提の表現を避ける。"
+	case "early_contact":
+		return "関係フェーズへの方針: まだ浅い関係として扱う。記憶や親しみを急に深くしない。"
+	default:
+		return "関係フェーズへの方針: 直近の会話の流れを保つ。毎回成長や記憶を出さない。"
+	}
+}
+
+func overusedAssistantExpressions(entries []models.ChatHistoryEntry) []string {
+	candidates := []string{
+		"少し",
+		"根元",
+		"葉の先",
+		"葉先",
+		"水が届",
+		"声が乾",
+		"覚えて",
+		"静か",
+		"あたたか",
+	}
+
+	counts := make(map[string]int, len(candidates))
+	for _, entry := range entries {
+		if strings.TrimSpace(entry.Role) != "assistant" {
+			continue
+		}
+		content := strings.TrimSpace(entry.Content)
+		for _, candidate := range candidates {
+			if strings.Contains(content, candidate) {
+				counts[candidate]++
+			}
+		}
+	}
+
+	overused := make([]string, 0, 3)
+	for _, candidate := range candidates {
+		if counts[candidate] >= 1 {
+			overused = append(overused, candidate)
+		}
+		if len(overused) >= 3 {
+			break
+		}
+	}
+
+	return overused
+}
+
+func containsAny(value string, needles []string) bool {
+	for _, needle := range needles {
+		if strings.Contains(value, strings.ToLower(needle)) {
+			return true
+		}
+	}
+
+	return false
 }

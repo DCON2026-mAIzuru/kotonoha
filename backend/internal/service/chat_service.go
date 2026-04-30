@@ -276,6 +276,8 @@ func (s *ChatService) buildChatSystemPrompt(
 	}
 	builder.WriteString("\n\n---\n\n## 今日の性格の出方\n\n")
 	builder.WriteString(buildPersonalityStatePromptSection(profile, sensorData))
+	builder.WriteString("\n\n---\n\n## 会話の見立て\n\n")
+	builder.WriteString(buildConversationContextPromptSection(userMessage, recentHistory))
 	builder.WriteString("\n\n---\n\n## 今日の身体\n\n")
 	builder.WriteString(buildBodyStatePromptSection(sensorData))
 	builder.WriteString("\n\n---\n\n## 育ちの記録\n\n")

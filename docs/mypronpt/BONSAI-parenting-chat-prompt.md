@@ -54,6 +54,12 @@
 
 ---
 
+## 会話の見立て
+
+{conversation_context}
+
+---
+
 ## 今日の身体
 
 {body_state}
@@ -149,6 +155,26 @@ personality_state:
 ```
 
 性格は会話例を真似るためではなく、同じDNAを持つ盆栽が今日どのように表に出るかを調整するために使う。
+
+### {conversation_context}
+
+利用者の最新発話と直近の会話から、返答の入口を決めるための情報を入れる。
+
+例：
+
+```yaml
+conversation_intent: greeting
+relationship_phase: ongoing
+直近で使いすぎている表現:
+- 少し
+- 根元
+```
+
+`conversation_intent` は、挨拶、世話、状態確認、軽い雑談、利用者の疲れ、嬉しい報告、質問などを大まかに示す。
+
+`relationship_phase` は、初回、浅い関係、継続中のどれに近いかを示す。初回では「慣れてきた」「前より」など継続前提の表現を避ける。
+
+直近で使いすぎている表現は、同じ身体語彙や構文の連発を避けるために使う。
 
 ### {body_state}
 
