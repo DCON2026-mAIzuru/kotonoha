@@ -86,7 +86,7 @@ func resolveGeminiModelPriority(geminiModel string, geminiModelPriority string) 
 	if strings.TrimSpace(geminiModelPriority) != "" {
 		raw = strings.Split(geminiModelPriority, ",")
 	} else if strings.TrimSpace(geminiModel) != "" {
-		raw = append(raw, geminiModel)
+		raw = append(raw, strings.Split(geminiModel, ",")...)
 		raw = append(raw, defaults...)
 	} else {
 		raw = defaults
