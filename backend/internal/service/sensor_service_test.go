@@ -121,6 +121,49 @@ func TestNormalizeSensorReadingMarksInvalidOutOfRangeReadings(t *testing.T) {
 	}
 }
 
+func TestIngestUsesSoilMoistureAsCanonicalMoisture(t *testing.T) {
+	t.Parallel()
+
+	store := &sensorServiceTestStore{}
+	service := NewSensorService(store, nil, nil, nil)
+	soilMoisture := 28.4
+	airHumidity := 61.2
+	pressure := 1008.6
+	ec := 520.0
+	ph := 6.7
+
+	result, err := service.Ingest(context.Background(), IngestSensorInput{
+		UserID:              "user-1",
+		DeviceID:            "esp32-demo-001",
+		RecordedAt:          time.Date(2026, 4, 14, 12, 0, 0, 0, time.UTC),
+		MoisturePercent:     airHumidity,
+		LightLux:            1200,
+		TemperatureCelsius:  24.1,
+		PressurePascal:      &pressure,
+		SoilMoisturePercent: &soilMoisture,
+		SoilECUsCm:          &ec,
+		SoilPHValue:         &ph,
+	})
+	if err != nil {
+		t.Fatalf("Ingest returned error: %v", err)
+	}
+	if result.SensorData.MoisturePercent != soilMoisture {
+		t.Fatalf("expected canonical moisture to use soil value %v, got %v", soilMoisture, result.SensorData.MoisturePercent)
+	}
+	if got := result.SensorData.RawPayload["air_humidity_percent"]; got != airHumidity {
+		t.Fatalf("expected air humidity to be preserved, got %#v", got)
+	}
+	if got := result.SensorData.RawPayload["soil_moisture_percent"]; got != soilMoisture {
+		t.Fatalf("expected soil moisture raw payload, got %#v", got)
+	}
+	if got := result.SensorData.RawPayload["soil_ec_us_cm"]; got != ec {
+		t.Fatalf("expected soil EC raw payload, got %#v", got)
+	}
+	if got := result.SensorData.RawPayload["soil_ph_value"]; got != ph {
+		t.Fatalf("expected soil pH raw payload, got %#v", got)
+	}
+}
+
 func TestShouldTriggerWateringEventSkipsInvalidReadings(t *testing.T) {
 	t.Parallel()
 

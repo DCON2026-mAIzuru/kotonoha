@@ -23,7 +23,8 @@
 const char* WIFI_SSID = "****";
 const char* WIFI_PASSWORD = "****";
 
-const char* BACKEND_URL = "https://kotonoha-backend.fly.dev/api/v1/sensor";
+#define BACKEND_HOST "10.172.28.184"
+#define BACKEND_URL "http://" BACKEND_HOST ":8080/api/v1/sensor"
 const char* SENSOR_TOKEN = "kotonoha-3242c839f8363681a3e1bf9fe5a7497a407738b84546a18b";
 const char* SENSOR_USER_ID = "096f1c29-75f1-48a8-ba40-a152b499bb12";
 const char* DEVICE_ID = "esp32-demo-001";
