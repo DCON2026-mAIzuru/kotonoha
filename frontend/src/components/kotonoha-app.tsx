@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AuthPanel } from '@/components/auth-panel';
 import { ChatPanel } from '@/components/chat-panel';
+import { DiagnosisPanel } from '@/components/diagnosis-panel';
 import { PwaInstallButton } from '@/components/pwa-install-button';
 import { ProfileSetupForm } from '@/components/profile-setup-form';
 import { PushPermissionCard } from '@/components/push-permission-card';
@@ -18,6 +19,7 @@ export function KotonohaApp() {
   const [llmOnline, setLlmOnline] = useState(false);
   const [espState, setEspState] = useState<'loading' | 'connected' | 'stale' | 'invalid' | 'error' | 'none'>('loading');
   const [showPush, setShowPush] = useState(false);
+  const [showDiagnosis, setShowDiagnosis] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [chatResetKey, setChatResetKey] = useState(0);
@@ -146,17 +148,27 @@ export function KotonohaApp() {
   const openEditProfile = () => {
     setShowEditProfile(true);
     setShowPush(false);
+    setShowDiagnosis(false);
     closeMobileMenu();
   };
 
   const openPushSettings = () => {
     setShowPush(true);
     setShowEditProfile(false);
+    setShowDiagnosis(false);
+    closeMobileMenu();
+  };
+
+  const openDiagnosis = () => {
+    setShowDiagnosis(true);
+    setShowPush(false);
+    setShowEditProfile(false);
     closeMobileMenu();
   };
 
   const closeEditProfile = () => setShowEditProfile(false);
   const closePushSettings = () => setShowPush(false);
+  const closeDiagnosis = () => setShowDiagnosis(false);
 
   const signOut = async () => {
     closeMobileMenu();
@@ -209,6 +221,13 @@ export function KotonohaApp() {
               onClick={openEditProfile}
             >
               プロフィール編集
+            </button>
+            <button
+              type="button"
+              className="k-status-chip"
+              onClick={openDiagnosis}
+            >
+              画像診断
             </button>
             <button
               type="button"
@@ -281,6 +300,9 @@ export function KotonohaApp() {
               <button type="button" className="k-mobile-menu-item" onClick={openEditProfile}>
                 プロフィール編集
               </button>
+              <button type="button" className="k-mobile-menu-item" onClick={openDiagnosis}>
+                画像診断
+              </button>
               <button type="button" className="k-mobile-menu-item" onClick={openPushSettings}>
                 通知設定
               </button>
@@ -331,6 +353,23 @@ export function KotonohaApp() {
         >
           <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 480 }}>
             <PushPermissionCard token={auth.accessToken} onClose={closePushSettings} />
+          </div>
+        </div>
+      )}
+
+      {/* Diagnosis modal (toggled) */}
+      {showDiagnosis && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100,
+            background: 'rgba(42, 41, 37, 0.46)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '24px 16px',
+          }}
+          onClick={closeDiagnosis}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 560 }}>
+            <DiagnosisPanel token={auth.accessToken} onClose={closeDiagnosis} />
           </div>
         </div>
       )}

@@ -1,8 +1,8 @@
 'use client';
 
-import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { getCurrentSensorData, getMoistureControl, updateMoistureControl } from '@/lib/backend-api';
-import type { MoistureControl, SensorData } from '@/types/api';
+import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { getCurrentSensorData, getMoistureControl, updateMoistureControl, uploadDiagnosisImage } from '@/lib/backend-api';
+import type { BonsaiDiagnosis, MoistureControl, SensorData } from '@/types/api';
 import { useChatSocket } from '@/hooks/use-chat-socket';
 
 interface ChatPanelProps {
@@ -88,9 +88,14 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   const [moistureDraft, setMoistureDraft] = useState('');
   const [moistureControlError, setMoistureControlError] = useState('');
   const [moistureControlSaving, setMoistureControlSaving] = useState(false);
+  const [diagnosis, setDiagnosis] = useState<BonsaiDiagnosis | null>(null);
+  const [diagnosisLoading, setDiagnosisLoading] = useState(false);
+  const [diagnosisMessage, setDiagnosisMessage] = useState('');
+  const [diagnosisError, setDiagnosisError] = useState(false);
   const [mobileInfoOpen, setMobileInfoOpen] = useState(false);
   const [mobileSensorOpen, setMobileSensorOpen] = useState(false);
   const listRef = useRef<HTMLDivElement>(null);
+  const diagnosisInputRef = useRef<HTMLInputElement>(null);
 
   const { messages, status, errorMessage, sendMessage } = useChatSocket(token, true);
   const isStreaming = useMemo(() => messages.some((m) => m.role === 'assistant' && m.text === ''), [messages]);
@@ -210,6 +215,33 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
 
   const handleQuickPrompt = (prompt: string) => {
     sendMessage(prompt);
+  };
+
+  const openDiagnosisCapture = () => {
+    diagnosisInputRef.current?.click();
+  };
+
+  const handleDiagnosisFileChange = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) {
+      return;
+    }
+
+    setDiagnosisLoading(true);
+    setDiagnosis(null);
+    setDiagnosisMessage('');
+    setDiagnosisError(false);
+    try {
+      const result = await uploadDiagnosisImage(token, file);
+      setDiagnosis(result);
+      setDiagnosisMessage('画像診断が完了しました');
+    } catch (error) {
+      setDiagnosisMessage(error instanceof Error ? error.message : '画像診断に失敗しました');
+      setDiagnosisError(true);
+    } finally {
+      setDiagnosisLoading(false);
+    }
   };
 
   const now = new Date().toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
@@ -547,19 +579,56 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
             disabled={isStreaming}
           />
 
+          {(diagnosis || diagnosisLoading || diagnosisMessage) && (
+            <section className={`k-inline-diagnosis${diagnosisError ? ' k-inline-diagnosis-error' : ''}`}>
+              <div>
+                <span className="k-inline-diagnosis-label">画像診断</span>
+                {diagnosis ? (
+                  <p>
+                    健康度 {diagnosis.health_score.toFixed(1)} / 100 ・ {diagnosis.status_label}
+                    <span> 深刻度: {diagnosis.severity_label}</span>
+                  </p>
+                ) : (
+                  <p>{diagnosisLoading ? '診断中...' : diagnosisMessage}</p>
+                )}
+                {diagnosis?.detail && <small>{diagnosis.detail}</small>}
+                {!diagnosis && diagnosisMessage && diagnosisError && <small>{diagnosisMessage}</small>}
+              </div>
+            </section>
+          )}
+
           <div className="k-composer-footer">
             <p>
               {isStreaming
                 ? `${bonsaiName} が言葉を選んでいます...`
-                : (errorMessage || sensorError || backendStatusText)}
+                : (errorMessage || sensorError || diagnosisMessage || backendStatusText)}
             </p>
-            <button
-              type="submit"
-              className="k-submit-btn"
-              disabled={isStreaming || !input.trim()}
-            >
-              {isStreaming ? 'Streaming...' : (language === 'ja' ? '送信' : 'Send')}
-            </button>
+            <div className="k-composer-actions">
+              <input
+                ref={diagnosisInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                onChange={(event) => void handleDiagnosisFileChange(event)}
+                className="sr-only"
+                aria-label="盆栽の写真を撮って画像診断する"
+              />
+              <button
+                type="button"
+                className="k-diagnosis-btn"
+                disabled={diagnosisLoading || isStreaming}
+                onClick={openDiagnosisCapture}
+              >
+                {diagnosisLoading ? '診断中...' : '写真診断'}
+              </button>
+              <button
+                type="submit"
+                className="k-submit-btn"
+                disabled={isStreaming || !input.trim()}
+              >
+                {isStreaming ? 'Streaming...' : (language === 'ja' ? '送信' : 'Send')}
+              </button>
+            </div>
           </div>
         </form>
 

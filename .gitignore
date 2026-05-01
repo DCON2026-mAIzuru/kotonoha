@@ -33,3 +33,5 @@ pnpm-debug.log*
 DESIGN.md*
 docs/DESIGN.md
 /DL/venv/
+/DL/.venv/
+/DL/__pycache__/

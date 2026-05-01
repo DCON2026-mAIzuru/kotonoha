@@ -48,6 +48,7 @@ export interface SensorData {
   temperature_celsius: number;
   recorded_at: string;
   sensor_status: 'normal' | 'stale' | 'invalid' | string;
+  raw_payload?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -56,6 +57,30 @@ export interface MoistureControl {
   paused: boolean;
   manual_value: number | null;
   updated_at?: string;
+}
+
+export interface DiagnosisColorRatios {
+  green: number;
+  yellow: number;
+  brown_red: number;
+}
+
+export interface BonsaiDiagnosis {
+  id: string;
+  user_id: string;
+  health_score: number;
+  status: string;
+  status_label: string;
+  severity: string;
+  severity_label: string;
+  detail: string;
+  ratios: {
+    total: DiagnosisColorRatios;
+    top: DiagnosisColorRatios;
+    bottom: DiagnosisColorRatios;
+  };
+  artifact_urls?: Partial<Record<'yolo_detection' | 'sam_segmentation' | 'color_extraction', string>>;
+  created_at: string;
 }
 
 export interface TypingProfile {

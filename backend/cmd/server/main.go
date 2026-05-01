@@ -7,10 +7,12 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
 	"github.com/apple/kotonoha/backend/internal/api"
+	"github.com/apple/kotonoha/backend/internal/dlclient"
 	"github.com/apple/kotonoha/backend/internal/llm"
 	"github.com/apple/kotonoha/backend/internal/realtime"
 	"github.com/apple/kotonoha/backend/internal/repository"
@@ -44,6 +46,9 @@ func main() {
 	llmEmbedder := llm.NewEmbedder(cfg.GeminiAPIKey, cfg.GeminiEmbeddingModel)
 	realtimeHub := realtime.NewHub()
 	pushSender := pushtransport.NewSender(cfg.VapidPublicKey, cfg.VapidPrivateKey, cfg.VapidSubject)
+	dlTimeoutSeconds := parsePositiveInt(cfg.DLServiceTimeout, 90)
+	diagnosisMaxImageMB := int64(parsePositiveInt(cfg.DiagnosisMaxImageMB, 8))
+	dlClient := dlclient.New(cfg.DLServiceURL, time.Duration(dlTimeoutSeconds)*time.Second)
 
 	deps := api.Dependencies{
 		Config:                  cfg,
@@ -52,6 +57,7 @@ func main() {
 		PushSubscriptionService: service.NewPushSubscriptionService(store, pushSender),
 		ChatService:             service.NewChatService(store, llmStreamer, llmEmbedder),
 		SensorService:           service.NewSensorService(store, llmStreamer, realtimeHub, pushSender),
+		DiagnosisService:        service.NewDiagnosisService(store, dlClient, diagnosisMaxImageMB, cfg.DiagnosisArtifactDir),
 		RealtimeHub:             realtimeHub,
 		JWTVerifier:             verifier,
 	}
@@ -82,4 +88,12 @@ func main() {
 	}
 
 	log.Println("サーバーを停止しました")
+}
+
+func parsePositiveInt(value string, fallback int) int {
+	parsed, err := strconv.Atoi(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }
