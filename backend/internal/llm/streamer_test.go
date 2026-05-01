@@ -42,6 +42,16 @@ func TestResolveGeminiModelPriorityDeduplicatesModels(t *testing.T) {
 	}
 }
 
+func TestResolveGeminiModelPriorityAcceptsCommaSeparatedGeminiModel(t *testing.T) {
+	t.Parallel()
+
+	got := resolveGeminiModelPriority(" gemini-3-flash-preview, gemini-2.5-flash ", "")
+	want := []string{"gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.5-flash-lite"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("resolveGeminiModelPriority() = %v, want %v", got, want)
+	}
+}
+
 func TestFailoverStreamerFallsBackOnRetryableErrors(t *testing.T) {
 	t.Parallel()
 

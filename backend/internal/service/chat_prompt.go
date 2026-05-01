@@ -3,6 +3,7 @@ package service
 import (
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"github.com/apple/kotonoha/backend/internal/models"
@@ -11,6 +12,62 @@ import (
 
 func buildBasePrinciplePrompt() string {
 	return prompts.ParentingChat()
+}
+
+func buildImageDiagnosisPromptSection(diagnosis *models.BonsaiDiagnosis) string {
+	if diagnosis == nil {
+		return "まだ画像診断の記録はない。葉色について聞かれた場合は、写真診断を使うとより具体的に見られると短く伝える。"
+	}
+
+	createdAt := diagnosis.CreatedAt
+	if createdAt.IsZero() {
+		createdAt = time.Now().UTC()
+	}
+
+	total := diagnosis.Ratios.Total
+	top := diagnosis.Ratios.Top
+	bottom := diagnosis.Ratios.Bottom
+
+	var guidance string
+	switch diagnosis.Severity {
+	case "high":
+		guidance = "葉色の乱れが強い。断定しすぎず、光・水・根の状態を見直す提案を短く添える。"
+	case "medium":
+		guidance = "弱りの兆しがある。慌てさせず、数日単位で観察する言い方にする。"
+	case "none":
+		guidance = "葉色はおおむね落ち着いている。安心を伝えつつ、油断しない程度に軽く触れる。"
+	default:
+		guidance = "画像診断は参考情報として扱う。写真だけで病気や枯死を断定しない。"
+	}
+
+	return fmt.Sprintf(`latest_image_diagnosis:
+  diagnosed_at: %s
+  health_score: %.1f / 100
+  status: %s
+  severity: %s
+  detail: %s
+  leaf_color_total: green %.1f%%, yellow %.1f%%, brown %.1f%%
+  leaf_color_top: green %.1f%%, yellow %.1f%%, brown %.1f%%
+  leaf_color_bottom: green %.1f%%, yellow %.1f%%, brown %.1f%%
+response_guidance: %s
+
+画像診断は「写真から見える葉色の手がかり」として使う。土の水分・光・温度のセンサー値と矛盾する場合は、どちらか一方を断定せず「写真ではこう見える、今の土はこう感じる」と分けて話す。`,
+		createdAt.Format("2006-01-02T15:04:05Z07:00"),
+		diagnosis.HealthScore,
+		strings.TrimSpace(diagnosis.StatusLabel),
+		strings.TrimSpace(diagnosis.SeverityLabel),
+		truncateRunes(strings.TrimSpace(diagnosis.Detail), 240),
+		total.Green,
+		total.Yellow,
+		total.BrownRed,
+		top.Green,
+		top.Yellow,
+		top.BrownRed,
+		bottom.Green,
+		bottom.Yellow,
+		bottom.BrownRed,
+		guidance,
+	)
 }
 
 func buildGrowthStatePromptSection(profile *models.BonsaiProfile, sensorData *models.SensorData) string {

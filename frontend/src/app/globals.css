@@ -879,6 +879,38 @@ button { appearance: none; }
   font-size: 0.82rem;
 }
 
+.k-composer-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.k-diagnosis-btn {
+  min-width: 92px;
+  border: 1px solid rgba(88, 127, 92, 0.16);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: rgba(229, 239, 227, 0.72);
+  color: #587f5c;
+  cursor: pointer;
+  font-size: 0.82rem;
+  line-height: 1;
+  white-space: nowrap;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.k-diagnosis-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  background: rgba(218, 233, 219, 0.92);
+}
+
+.k-diagnosis-btn:disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
+}
+
 .k-submit-btn {
   min-width: 100px;
   border: 0;
@@ -896,6 +928,42 @@ button { appearance: none; }
 .k-submit-btn:hover:not(:disabled) { transform: translateY(-1px); }
 .k-submit-btn:disabled,
 .k-prompt-chip:disabled { opacity: 0.58; cursor: not-allowed; }
+
+.k-inline-diagnosis {
+  margin-top: 6px;
+  padding: 8px 10px;
+  border: 1px solid rgba(88, 127, 92, 0.12);
+  border-radius: 10px;
+  background: rgba(229, 239, 227, 0.36);
+}
+
+.k-inline-diagnosis-error {
+  border-color: rgba(192, 87, 70, 0.16);
+  background: rgba(192, 87, 70, 0.06);
+}
+
+.k-inline-diagnosis-label {
+  display: inline-block;
+  margin-bottom: 2px;
+  color: #587f5c;
+  font-size: 0.68rem;
+  font-weight: 700;
+}
+
+.k-inline-diagnosis p {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.k-inline-diagnosis small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 0.7rem;
+  line-height: 1.45;
+}
 
 /* ── Auth ── */
 .k-auth-shell {
@@ -1526,6 +1594,26 @@ button { appearance: none; }
     padding: 7px 10px;
     box-shadow: none;
     font-size: 0.78rem;
+  }
+  .k-composer-actions {
+    gap: 5px;
+  }
+  .k-diagnosis-btn {
+    min-width: 66px;
+    padding: 7px 8px;
+    font-size: 0.72rem;
+  }
+  .k-inline-diagnosis {
+    padding: 7px 8px;
+  }
+  .k-inline-diagnosis p {
+    font-size: 0.72rem;
+  }
+  .k-inline-diagnosis small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.66rem;
   }
 }
 

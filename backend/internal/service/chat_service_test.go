@@ -13,6 +13,7 @@ import (
 type chatServiceTestStore struct {
 	profile         *models.BonsaiProfile
 	sensorData      *models.SensorData
+	diagnosis       *models.BonsaiDiagnosis
 	recentHistory   []models.ChatHistoryEntry
 	memories        []models.BonsaiMemory
 	createdHistory  []models.CreateChatHistoryEntryInput
@@ -45,6 +46,10 @@ func (s *chatServiceTestStore) DeleteChatHistoryByUserID(context.Context, string
 
 func (s *chatServiceTestStore) GetBonsaiProfileByUserID(context.Context, string) (*models.BonsaiProfile, error) {
 	return s.profile, nil
+}
+
+func (s *chatServiceTestStore) GetLatestBonsaiDiagnosis(context.Context, string) (*models.BonsaiDiagnosis, error) {
+	return s.diagnosis, nil
 }
 
 func (s *chatServiceTestStore) GetSensorDataByUserID(context.Context, string) (*models.SensorData, error) {
@@ -106,6 +111,20 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 				"temperature_celsius": -127.0,
 			},
 		},
+		diagnosis: &models.BonsaiDiagnosis{
+			HealthScore:   72.4,
+			Status:        "warning",
+			StatusLabel:   "注意",
+			Severity:      "medium",
+			SeverityLabel: "中",
+			Detail:        "古葉側に黄変・茶変が見られ、弱りの兆候が出ています。",
+			Ratios: models.DiagnosisRatios{
+				Total:  models.DiagnosisColorRatios{Green: 82.1, Yellow: 12.4, BrownRed: 5.5},
+				Top:    models.DiagnosisColorRatios{Green: 94.0, Yellow: 4.1, BrownRed: 1.9},
+				Bottom: models.DiagnosisColorRatios{Green: 68.5, Yellow: 21.0, BrownRed: 10.5},
+			},
+			CreatedAt: time.Date(2026, 4, 30, 16, 0, 0, 0, time.FixedZone("JST", 9*60*60)),
+		},
 		recentHistory: []models.ChatHistoryEntry{
 			{Role: "assistant", Content: "根元は少し静かです。"},
 			{Role: "event", Content: "お水をもらえて助かりました。"},
@@ -146,6 +165,12 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 		"前の持ち主は朝に水をくれる人だった",
 		"昔は別の庭で育っていた",
 		"## 今日の身体",
+		"## 画像から見える葉の様子",
+		"latest_image_diagnosis:",
+		"health_score: 72.4 / 100",
+		"status: 注意",
+		"leaf_color_total: green 82.1%, yellow 12.4%, brown 5.5%",
+		"写真から見える葉色の手がかり",
 		"## なじみ具合",
 		"bond_score: 92",
 		"ぼんす語尾",

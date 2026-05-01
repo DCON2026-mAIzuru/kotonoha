@@ -30,6 +30,7 @@ type chatStore interface {
 	DeleteBonsaiMemoriesByUserID(ctx context.Context, userID string) (int64, error)
 	DeleteChatHistoryByUserID(ctx context.Context, userID string) (int64, error)
 	GetBonsaiProfileByUserID(ctx context.Context, userID string) (*models.BonsaiProfile, error)
+	GetLatestBonsaiDiagnosis(ctx context.Context, userID string) (*models.BonsaiDiagnosis, error)
 	GetSensorDataByUserID(ctx context.Context, userID string) (*models.SensorData, error)
 	ListRecentChatHistoryByUserID(ctx context.Context, userID string, limit int) ([]models.ChatHistoryEntry, error)
 	MatchBonsaiMemories(ctx context.Context, userID string, embedding []float64, limit int) ([]models.BonsaiMemory, error)
@@ -115,12 +116,17 @@ func (s *ChatService) StreamReply(ctx context.Context, input StreamChatInput, on
 		return err
 	}
 
+	diagnosis, err := s.store.GetLatestBonsaiDiagnosis(ctx, input.UserID)
+	if err != nil {
+		return err
+	}
+
 	recentHistory, err := s.store.ListRecentChatHistoryByUserID(ctx, input.UserID, chatRecentHistoryLimit)
 	if err != nil {
 		return err
 	}
 
-	systemPrompt := s.buildChatSystemPrompt(ctx, input.UserID, input.Text, profile, sensorData, recentHistory)
+	systemPrompt := s.buildChatSystemPrompt(ctx, input.UserID, input.Text, profile, sensorData, diagnosis, recentHistory)
 
 	userEntry, err := s.store.CreateChatHistoryEntry(ctx, models.CreateChatHistoryEntryInput{
 		UserID:         input.UserID,
@@ -254,6 +260,7 @@ func (s *ChatService) buildChatSystemPrompt(
 	userMessage string,
 	profile *models.BonsaiProfile,
 	sensorData *models.SensorData,
+	diagnosis *models.BonsaiDiagnosis,
 	recentHistory []models.ChatHistoryEntry,
 ) string {
 	memories := make([]models.BonsaiMemory, 0, chatRelevantMemoriesLimit)
@@ -280,6 +287,8 @@ func (s *ChatService) buildChatSystemPrompt(
 	builder.WriteString(buildConversationContextPromptSection(userMessage, recentHistory))
 	builder.WriteString("\n\n---\n\n## 今日の身体\n\n")
 	builder.WriteString(buildBodyStatePromptSection(sensorData))
+	builder.WriteString("\n\n---\n\n## 画像から見える葉の様子\n\n")
+	builder.WriteString(buildImageDiagnosisPromptSection(diagnosis))
 	builder.WriteString("\n\n---\n\n## 育ちの記録\n\n")
 	builder.WriteString(buildGrowthStatePromptSection(profile, sensorData))
 	builder.WriteString("\n\n---\n\n## 手入れの記録\n\n")

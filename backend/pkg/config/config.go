@@ -23,6 +23,10 @@ type Config struct {
 	VapidPublicKey         string
 	VapidPrivateKey        string
 	VapidSubject           string
+	DLServiceURL           string
+	DLServiceTimeout       string
+	DiagnosisMaxImageMB    string
+	DiagnosisArtifactDir   string
 }
 
 func Load() (*Config, error) {
@@ -44,6 +48,10 @@ func Load() (*Config, error) {
 		VapidPublicKey:         os.Getenv("VAPID_PUBLIC_KEY"),
 		VapidPrivateKey:        os.Getenv("VAPID_PRIVATE_KEY"),
 		VapidSubject:           os.Getenv("VAPID_SUBJECT"),
+		DLServiceURL:           getEnv("DL_SERVICE_URL", "http://127.0.0.1:8090"),
+		DLServiceTimeout:       getEnv("DL_SERVICE_TIMEOUT_SECONDS", "90"),
+		DiagnosisMaxImageMB:    getEnv("DIAGNOSIS_MAX_IMAGE_MB", "8"),
+		DiagnosisArtifactDir:   getEnv("DIAGNOSIS_ARTIFACT_DIR", "/tmp/kotonoha-diagnosis-artifacts"),
 	}
 
 	if err := cfg.validate(); err != nil {

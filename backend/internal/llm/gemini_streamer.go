@@ -125,7 +125,7 @@ func (s *GeminiStreamer) buildEndpoint() (string, error) {
 	}
 
 	endpoint, err := url.Parse(
-		fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:streamGenerateContent", url.PathEscape(s.model)),
+		fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:streamGenerateContent", url.PathEscape(normalizeGeminiModelName(s.model))),
 	)
 	if err != nil {
 		return "", fmt.Errorf("Geminiエンドポイントの構築に失敗しました: %w", err)

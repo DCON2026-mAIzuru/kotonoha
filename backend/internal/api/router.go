@@ -20,6 +20,7 @@ type Dependencies struct {
 	PushSubscriptionService *service.PushSubscriptionService
 	ChatService             *service.ChatService
 	SensorService           *service.SensorService
+	DiagnosisService        *service.DiagnosisService
 	RealtimeHub             *realtime.Hub
 	JWTVerifier             *pkgauth.SupabaseJWTVerifier
 }
@@ -43,6 +44,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	pushSubscriptionHandler := handlers.NewPushSubscriptionHandler(deps.PushSubscriptionService)
 	chatHandler := handlers.NewChatHandler(deps.ChatService, deps.RealtimeHub, deps.Config.BackendAllowedOrigin)
 	sensorHandler := handlers.NewSensorHandler(deps.SensorService, deps.Config.SensorSharedToken)
+	diagnosisHandler := handlers.NewDiagnosisHandler(deps.DiagnosisService, parsePositiveInt64(deps.Config.DiagnosisMaxImageMB, 8))
 	authMiddleware := middleware.RequireAuth(deps.JWTVerifier)
 
 	engine.GET("/healthz", healthHandler.Liveness)
@@ -79,7 +81,28 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		sensorRoutes.PATCH("/moisture-control", sensorHandler.UpdateMoistureControl)
 
 		apiV1.POST("/sensor", sensorHandler.Ingest)
+
+		diagnosisRoutes := apiV1.Group("/diagnosis")
+		diagnosisRoutes.Use(authMiddleware)
+		diagnosisRoutes.POST("/images", diagnosisHandler.Create)
+		diagnosisRoutes.GET("/latest", diagnosisHandler.Latest)
+		diagnosisRoutes.GET("/history", diagnosisHandler.History)
+		diagnosisRoutes.GET("/artifacts/:id/:kind", diagnosisHandler.Artifact)
 	}
 
 	return engine
+}
+
+func parsePositiveInt64(value string, fallback int64) int64 {
+	var parsed int64
+	for _, ch := range value {
+		if ch < '0' || ch > '9' {
+			return fallback
+		}
+		parsed = parsed*10 + int64(ch-'0')
+	}
+	if parsed <= 0 {
+		return fallback
+	}
+	return parsed
 }

@@ -61,12 +61,17 @@ type SensorService struct {
 }
 
 type IngestSensorInput struct {
-	UserID             string
-	DeviceID           string    `json:"device_id"`
-	RecordedAt         time.Time `json:"recorded_at"`
-	MoisturePercent    float64   `json:"moisture_percent"`
-	LightLux           float64   `json:"light_lux"`
-	TemperatureCelsius float64   `json:"temperature_celsius"`
+	UserID              string
+	DeviceID            string    `json:"device_id"`
+	RecordedAt          time.Time `json:"recorded_at"`
+	MoisturePercent     float64   `json:"moisture_percent"`
+	AirHumidityPercent  *float64  `json:"air_humidity_percent"`
+	LightLux            float64   `json:"light_lux"`
+	TemperatureCelsius  float64   `json:"temperature_celsius"`
+	PressurePascal      *float64  `json:"pressure_pascal"`
+	SoilMoisturePercent *float64  `json:"soil_moisture_percent"`
+	SoilECUsCm          *float64  `json:"soil_ec_us_cm"`
+	SoilPHValue         *float64  `json:"soil_ph_value"`
 }
 
 type IngestSensorResult struct {
@@ -241,10 +246,20 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		return nil, errors.New("recorded_at が未来時刻すぎます")
 	case math.IsNaN(input.MoisturePercent) || math.IsInf(input.MoisturePercent, 0):
 		return nil, errors.New("moisture_percent が不正です")
+	case invalidOptionalFloat(input.AirHumidityPercent):
+		return nil, errors.New("air_humidity_percent が不正です")
 	case math.IsNaN(input.LightLux) || math.IsInf(input.LightLux, 0):
 		return nil, errors.New("light_lux が不正です")
 	case math.IsNaN(input.TemperatureCelsius) || math.IsInf(input.TemperatureCelsius, 0):
 		return nil, errors.New("temperature_celsius が不正です")
+	case invalidOptionalFloat(input.PressurePascal):
+		return nil, errors.New("pressure_pascal が不正です")
+	case invalidOptionalFloat(input.SoilMoisturePercent):
+		return nil, errors.New("soil_moisture_percent が不正です")
+	case invalidOptionalFloat(input.SoilECUsCm):
+		return nil, errors.New("soil_ec_us_cm が不正です")
+	case invalidOptionalFloat(input.SoilPHValue):
+		return nil, errors.New("soil_ph_value が不正です")
 	}
 
 	previous, err := s.store.GetSensorDataByUserID(ctx, input.UserID)
@@ -258,6 +273,8 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 	}
 
 	rawMoisturePercent := input.MoisturePercent
+	effectiveMoisturePercent := canonicalMoisturePercent(input)
+	input.MoisturePercent = effectiveMoisturePercent
 	control := s.moistureControlForUser(input.UserID)
 	if control.Paused && control.ManualValue != nil {
 		input.MoisturePercent = *control.ManualValue
@@ -268,11 +285,16 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 	rawPayload := map[string]any{
 		"device_id":           input.DeviceID,
 		"recorded_at":         recordedAt.Format(time.RFC3339),
-		"moisture_percent":    rawMoisturePercent,
+		"moisture_percent":    effectiveMoisturePercent,
 		"light_lux":           input.LightLux,
 		"temperature_celsius": input.TemperatureCelsius,
 		"sensor_issues":       issues,
 	}
+	addOptionalRawPayloadFloat(rawPayload, "air_humidity_percent", airHumidityPercent(input, rawMoisturePercent))
+	addOptionalRawPayloadFloat(rawPayload, "pressure_pascal", input.PressurePascal)
+	addOptionalRawPayloadFloat(rawPayload, "soil_moisture_percent", input.SoilMoisturePercent)
+	addOptionalRawPayloadFloat(rawPayload, "soil_ec_us_cm", input.SoilECUsCm)
+	addOptionalRawPayloadFloat(rawPayload, "soil_ph_value", input.SoilPHValue)
 	if control.Paused {
 		rawPayload["moisture_control_paused"] = true
 		if control.ManualValue != nil {
@@ -612,6 +634,35 @@ func normalizeSensorReading(input IngestSensorInput, now time.Time) (string, flo
 	}
 
 	return sensorStatusFor(input.RecordedAt.UTC(), now, len(issues) > 0), moisture, light, temperature, issues
+}
+
+func canonicalMoisturePercent(input IngestSensorInput) float64 {
+	if input.SoilMoisturePercent != nil {
+		return *input.SoilMoisturePercent
+	}
+
+	return input.MoisturePercent
+}
+
+func airHumidityPercent(input IngestSensorInput, rawMoisturePercent float64) *float64 {
+	if input.AirHumidityPercent != nil {
+		return input.AirHumidityPercent
+	}
+	if input.SoilMoisturePercent != nil {
+		return &rawMoisturePercent
+	}
+
+	return nil
+}
+
+func invalidOptionalFloat(value *float64) bool {
+	return value != nil && (math.IsNaN(*value) || math.IsInf(*value, 0))
+}
+
+func addOptionalRawPayloadFloat(payload map[string]any, key string, value *float64) {
+	if value != nil {
+		payload[key] = *value
+	}
 }
 
 func clampFloat(value float64, min float64, max float64) float64 {

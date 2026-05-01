@@ -91,9 +91,8 @@ func (e *GeminiEmbedder) buildEndpoint() (string, error) {
 		return "", errors.New("GEMINI_EMBEDDING_MODEL が設定されていません")
 	}
 
-	modelPath := strings.TrimPrefix(e.model, "models/")
 	endpoint, err := url.Parse(
-		fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent", url.PathEscape(modelPath)),
+		fmt.Sprintf("https://generativelanguage.googleapis.com/v1beta/models/%s:embedContent", url.PathEscape(normalizeGeminiModelName(e.model))),
 	)
 	if err != nil {
 		return "", fmt.Errorf("埋め込みエンドポイントの構築に失敗しました: %w", err)
@@ -112,7 +111,7 @@ func (e *GeminiEmbedder) buildRequestBody(req EmbeddingRequest) ([]byte, error) 
 	}
 
 	payload := map[string]any{
-		"model": "models/" + strings.TrimPrefix(e.model, "models/"),
+		"model": "models/" + normalizeGeminiModelName(e.model),
 		"content": content{
 			Parts: []part{{Text: req.Text}},
 		},
