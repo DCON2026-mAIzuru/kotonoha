@@ -1,4 +1,4 @@
-import type { BonsaiDiagnosis, BonsaiProfile, ChatHistoryEntry, MoistureControl, PushSubscriptionRecord, SensorData, UpsertProfileInput } from '@/types/api';
+import type { BonsaiDiagnosis, BonsaiProfile, ChatHistoryEntry, MoistureControl, PresentationDemoResult, PresentationDemoStatus, PushSubscriptionRecord, SensorData, UpsertProfileInput } from '@/types/api';
 
 const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
 
@@ -120,6 +120,18 @@ export async function updateMoistureControl(
     body: JSON.stringify(input),
   });
   return payload.moisture_control;
+}
+
+export async function runPresentationDemo(token: string): Promise<PresentationDemoResult> {
+  const payload = await authFetch<{ result: PresentationDemoResult }>(token, '/api/v1/sensor/presentation-demo', {
+    method: 'POST',
+  });
+  return payload.result;
+}
+
+export async function getPresentationDemoStatus(token: string): Promise<PresentationDemoStatus> {
+  const payload = await authFetch<{ presentation_demo: PresentationDemoStatus }>(token, '/api/v1/sensor/presentation-demo');
+  return payload.presentation_demo;
 }
 
 export async function uploadDiagnosisImage(token: string, image: File): Promise<BonsaiDiagnosis> {

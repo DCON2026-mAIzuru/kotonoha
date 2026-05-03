@@ -1,7 +1,7 @@
 'use client';
 
-import { ChangeEvent, FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import { getCurrentSensorData, getMoistureControl, updateMoistureControl, uploadDiagnosisImage } from '@/lib/backend-api';
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { getCurrentSensorData, getMoistureControl, getPresentationDemoStatus, runPresentationDemo, updateMoistureControl, uploadDiagnosisImage } from '@/lib/backend-api';
 import type { BonsaiDiagnosis, MoistureControl, SensorData } from '@/types/api';
 import { useChatSocket } from '@/hooks/use-chat-socket';
 
@@ -14,6 +14,7 @@ interface ChatPanelProps {
 }
 
 const QUICK_PROMPTS = ['今日の様子を教えて', '水やりは必要？', '光は足りていそう？'] as const;
+const PRESENTATION_ACTION_ENABLED = process.env.NEXT_PUBLIC_PRESENTATION_DEMO_MODE === 'true';
 
 /* ── SVG icons (ported from bonsAI reference) ── */
 function LeafMark() {
@@ -77,6 +78,19 @@ function statusText(status: 'idle' | 'connecting' | 'open' | 'closed' | 'error')
   }
 }
 
+function rawSensorNumber(sensorData: SensorData | null, key: string): number | null {
+  const value = sensorData?.raw_payload?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function formatRawSensorValue(sensorData: SensorData | null, key: string, unit = '', fractionDigits = 1): string {
+  const value = rawSensorNumber(sensorData, key);
+  if (value === null) {
+    return '---';
+  }
+  return `${value.toFixed(fractionDigits)}${unit}`;
+}
+
 export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, onSensorStateChange }: ChatPanelProps) {
   const [input, setInput] = useState('');
   const [language, setLanguage] = useState<'ja' | 'en'>('ja');
@@ -88,6 +102,10 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   const [moistureDraft, setMoistureDraft] = useState('');
   const [moistureControlError, setMoistureControlError] = useState('');
   const [moistureControlSaving, setMoistureControlSaving] = useState(false);
+  const [presentationActionRunning, setPresentationActionRunning] = useState(false);
+  const [presentationActionMessage, setPresentationActionMessage] = useState('');
+  const [presentationActionError, setPresentationActionError] = useState(false);
+  const [presentationActionApiEnabled, setPresentationActionApiEnabled] = useState<boolean | null>(null);
   const [diagnosis, setDiagnosis] = useState<BonsaiDiagnosis | null>(null);
   const [diagnosisLoading, setDiagnosisLoading] = useState(false);
   const [diagnosisMessage, setDiagnosisMessage] = useState('');
@@ -99,8 +117,11 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
 
   const { messages, status, errorMessage, sendMessage } = useChatSocket(token, true);
   const isStreaming = useMemo(() => messages.some((m) => m.role === 'assistant' && m.text === ''), [messages]);
+  const presentationActionReady = PRESENTATION_ACTION_ENABLED && presentationActionApiEnabled === true;
+  const presentAsConnected = presentationActionReady && (!sensorData || sensorData.sensor_status === 'stale' || Boolean(sensorError));
+  const visibleSensorError = presentAsConnected ? '' : sensorError;
 
-  const loadSensorData = async (options?: { showLoading?: boolean; isManualRefresh?: boolean }) => {
+  const loadSensorData = useCallback(async (options?: { showLoading?: boolean; isManualRefresh?: boolean }) => {
     const showLoading = options?.showLoading ?? false;
     const isManualRefresh = options?.isManualRefresh ?? false;
 
@@ -125,12 +146,14 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
       setSensorLoading(false);
       setSensorRefreshing(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => { onStatusChange?.(status); }, [status, onStatusChange]);
 
   useEffect(() => {
-    const nextState = sensorError
+    const nextState = presentAsConnected
+      ? 'connected'
+      : sensorError
       ? 'error'
       : sensorLoading
         ? 'loading'
@@ -142,7 +165,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
               ? 'invalid'
               : 'none';
     onSensorStateChange?.(nextState);
-  }, [sensorData, sensorError, sensorLoading, onSensorStateChange]);
+  }, [presentAsConnected, sensorData, sensorError, sensorLoading, onSensorStateChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,6 +210,26 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   }, [token]);
 
   useEffect(() => {
+    let cancelled = false;
+
+    getPresentationDemoStatus(token)
+      .then((status) => {
+        if (!cancelled) {
+          setPresentationActionApiEnabled(status.enabled);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setPresentationActionApiEnabled(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
     if (moistureControl?.paused) {
       setMoistureDraft(
         typeof moistureControl.manual_value === 'number'
@@ -201,6 +244,18 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
     setMoistureDraft('');
     setMoistureControlError('');
   }, [moistureControl, sensorData]);
+
+  useEffect(() => {
+    if (!presentationActionReady) {
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      void loadSensorData();
+    }, 5000);
+
+    return () => window.clearInterval(timer);
+  }, [loadSensorData, presentationActionReady]);
 
   // Auto-scroll
   useEffect(() => {
@@ -248,7 +303,10 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   const sensorUpdatedLabel = sensorData
     ? new Date(sensorData.recorded_at).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     : '';
-  const sensorStatusLabel = sensorData
+  const displaySensorStatus = presentAsConnected ? 'normal' : (sensorData?.sensor_status ?? 'unknown');
+  const sensorStatusLabel = presentAsConnected
+    ? '正常'
+    : sensorData
     ? sensorData.sensor_status === 'invalid'
       ? '一部異常'
       : sensorData.sensor_status === 'stale'
@@ -308,6 +366,28 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
       setMoistureControlError(error instanceof Error ? error.message : '水分値の更新に失敗しました');
     } finally {
       setMoistureControlSaving(false);
+    }
+  };
+
+  const handlePresentationAction = async () => {
+    setPresentationActionRunning(true);
+    setPresentationActionMessage('');
+    setPresentationActionError(false);
+    setMoistureControlError('');
+
+    try {
+      const result = await runPresentationDemo(token);
+      setSensorData(result.final_result.sensor_data);
+      setMoistureControl({ paused: false, manual_value: null });
+      setPresentationActionMessage(
+        `低水分の通知を送信しました（水分 ${Math.round(result.moisture_before)}% → ${Math.round(result.moisture_after)}%）`,
+      );
+      await loadSensorData({ isManualRefresh: true });
+    } catch (error) {
+      setPresentationActionMessage(error instanceof Error ? error.message : 'センサー変動に失敗しました');
+      setPresentationActionError(true);
+    } finally {
+      setPresentationActionRunning(false);
     }
   };
 
@@ -407,9 +487,9 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
               <span className="k-sensor-chip k-sensor-chip-compact">
                 <LeafMark />
                 <span className="k-sensor-chip-label">デバイス</span>
-                <span className="k-sensor-chip-value">{sensorData?.device_id || '---'}</span>
+                <span className="k-sensor-chip-value">{sensorData?.device_id || (presentAsConnected ? 'ことの葉01' : '---')}</span>
               </span>
-              <span className={`k-sensor-chip k-sensor-chip-compact k-sensor-chip-status-${sensorData?.sensor_status ?? 'unknown'}`}>
+              <span className={`k-sensor-chip k-sensor-chip-compact k-sensor-chip-status-${displaySensorStatus}`}>
                 <LeafMark />
                 <span className="k-sensor-chip-label">状態</span>
                 <span className="k-sensor-chip-value">{sensorStatusLabel}</span>
@@ -435,6 +515,31 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
                 <span className="k-sensor-chip-value">{sensorData ? `${sensorData.temperature_celsius.toFixed(1)}℃` : '---'}</span>
               </span>
               <span className="k-sensor-chip k-sensor-chip-compact">
+                <ThermometerMark />
+                <span className="k-sensor-chip-label">湿度</span>
+                <span className="k-sensor-chip-value">{formatRawSensorValue(sensorData, 'air_humidity_percent', '%')}</span>
+              </span>
+              <span className="k-sensor-chip k-sensor-chip-compact">
+                <ThermometerMark />
+                <span className="k-sensor-chip-label">気圧</span>
+                <span className="k-sensor-chip-value">{formatRawSensorValue(sensorData, 'pressure_pascal', ' hPa')}</span>
+              </span>
+              <span className="k-sensor-chip k-sensor-chip-compact">
+                <ThermometerMark />
+                <span className="k-sensor-chip-label">土温</span>
+                <span className="k-sensor-chip-value">{formatRawSensorValue(sensorData, 'soil_temperature_celsius', '℃')}</span>
+              </span>
+              <span className="k-sensor-chip k-sensor-chip-compact">
+                <WaterMark />
+                <span className="k-sensor-chip-label">EC</span>
+                <span className="k-sensor-chip-value">{formatRawSensorValue(sensorData, 'soil_ec_us_cm', ' us/cm', 0)}</span>
+              </span>
+              <span className="k-sensor-chip k-sensor-chip-compact">
+                <WaterMark />
+                <span className="k-sensor-chip-label">pH</span>
+                <span className="k-sensor-chip-value">{formatRawSensorValue(sensorData, 'soil_ph_value', '', 1)}</span>
+              </span>
+              <span className="k-sensor-chip k-sensor-chip-compact">
                 <ClockMark />
                 <span className="k-sensor-chip-label">最終更新</span>
                 <span className="k-sensor-chip-value">{sensorUpdatedLabel || '---'}</span>
@@ -453,7 +558,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
                 type="button"
                 className="k-esp-refresh-btn"
                 onClick={() => void handleMoisturePauseToggle()}
-                disabled={sensorLoading || moistureControlSaving}
+                disabled={sensorLoading || moistureControlSaving || presentationActionRunning}
               >
                 {moistureControlSaving
                   ? '更新中...'
@@ -461,6 +566,16 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
                     ? '水分自動へ戻す'
                     : '水分を一時停止'}
               </button>
+              {PRESENTATION_ACTION_ENABLED && (
+                <button
+                  type="button"
+                  className="k-esp-refresh-btn k-water-replay-btn"
+                  onClick={() => void handlePresentationAction()}
+                  disabled={!presentationActionReady || sensorLoading || sensorRefreshing || moistureControlSaving || presentationActionRunning}
+                >
+                  {presentationActionRunning ? '反映中...' : 'センサー変動'}
+                </button>
+              )}
               {moisturePaused && (
                 <>
                   <label className="k-moisture-input-wrap">
@@ -482,7 +597,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
                     type="button"
                     className="k-esp-refresh-btn"
                     onClick={() => void handleMoistureApply()}
-                    disabled={moistureControlSaving}
+                    disabled={moistureControlSaving || presentationActionRunning}
                   >
                     値を反映
                   </button>
@@ -492,7 +607,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
                 type="button"
                 className="k-esp-refresh-btn"
                 onClick={() => void loadSensorData({ isManualRefresh: true })}
-                disabled={sensorLoading || sensorRefreshing || moistureControlSaving}
+                disabled={sensorLoading || sensorRefreshing || moistureControlSaving || presentationActionRunning}
               >
                 {sensorRefreshing ? '再確認中...' : '再確認'}
               </button>
@@ -500,6 +615,11 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
           </div>
           {moistureControlError && (
             <p className="k-moisture-control-error">{moistureControlError}</p>
+          )}
+          {PRESENTATION_ACTION_ENABLED && !moistureControlError && presentationActionMessage && (
+            <p className={presentationActionError ? 'k-moisture-control-error' : 'k-moisture-control-note'}>
+              {presentationActionMessage}
+            </p>
           )}
         </section>
 
@@ -601,7 +721,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
             <p>
               {isStreaming
                 ? `${bonsaiName} が言葉を選んでいます...`
-                : (errorMessage || sensorError || diagnosisMessage || backendStatusText)}
+                : (errorMessage || visibleSensorError || diagnosisMessage || backendStatusText)}
             </p>
             <div className="k-composer-actions">
               <input

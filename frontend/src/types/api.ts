@@ -59,6 +59,27 @@ export interface MoistureControl {
   updated_at?: string;
 }
 
+export interface SensorIngestResult {
+  sensor_data: SensorData;
+  event_triggered: boolean;
+  event_name?: string;
+  event_message?: string;
+  push_sent_count?: number;
+  notification_warning?: string;
+}
+
+export interface PresentationDemoResult {
+  initial_reading: SensorData;
+  final_result: SensorIngestResult;
+  moisture_before: number;
+  moisture_after: number;
+  scenario: 'moisture_fluctuation' | string;
+}
+
+export interface PresentationDemoStatus {
+  enabled: boolean;
+}
+
 export interface DiagnosisColorRatios {
   green: number;
   yellow: number;

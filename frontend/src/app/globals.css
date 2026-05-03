@@ -621,6 +621,13 @@ button { appearance: none; }
   cursor: default;
 }
 
+.k-water-replay-btn {
+  border-color: rgba(72, 108, 83, 0.22);
+  background: rgba(229, 239, 227, 0.96);
+  color: #3d6548;
+  font-weight: 700;
+}
+
 .k-moisture-input-wrap {
   display: inline-flex;
   align-items: center;
@@ -654,6 +661,12 @@ button { appearance: none; }
   margin: 8px 0 0;
   font-size: 0.78rem;
   color: #a95f5f;
+}
+
+.k-moisture-control-note {
+  margin: 8px 0 0;
+  font-size: 0.78rem;
+  color: #5b7c5e;
 }
 
 .k-sensor-strip {
