@@ -31,10 +31,10 @@ const char* WIFI_PASSWORD = "****";
 */
 
 
-#define BACKEND_HOST "10.172.28.184"
+#define BACKEND_HOST "192.168.0.10"
 #define BACKEND_URL "http://" BACKEND_HOST ":8080/api/v1/sensor"
-const char* SENSOR_TOKEN = "kotonoha-3242c839f8363681a3e1bf9fe5a7497a407738b84546a18b";
-const char* SENSOR_USER_ID = "096f1c29-75f1-48a8-ba40-a152b499bb12";
+const char* SENSOR_TOKEN = "replace-with-sensor-shared-token";
+const char* SENSOR_USER_ID = "replace-with-user-id";
 const char* DEVICE_ID = "esp32-demo-001";
 
 const unsigned long SEND_INTERVAL_MS = 10UL * 1000UL;
@@ -60,7 +60,11 @@ unsigned long readingIndex = 0;
 bool timeSynced = false;
 
 float buildMockMoisture(unsigned long index);
+float buildMockAirHumidity(unsigned long index);
+float buildMockLight(unsigned long index);
+float buildMockAirTemperature(unsigned long index);
 float buildMockTemperature(unsigned long index);
+float buildMockPressure(unsigned long index);
 uint16_t buildMockEC(unsigned long index);
 float buildMockPh(unsigned long index);
 
@@ -175,6 +179,34 @@ float buildMockTemperature(unsigned long index) {
   return base + (pattern - 1) * 0.6f;
 }
 
+// 2-1. 大気湿度 (例: 51.4% 〜 58.6%)
+float buildMockAirHumidity(unsigned long index) {
+  const float base = 55.0f;
+  const int pattern = index % 7;
+  return base + (pattern - 3) * 1.2f;
+}
+
+// 2-2. 照度 (例: 7520 lux 〜 9440 lux)
+float buildMockLight(unsigned long index) {
+  const float base = 8500.0f;
+  const int pattern = index % 7;
+  return base + (pattern - 3) * 320.0f;
+}
+
+// 2-3. 気温 (例: 23.9℃ 〜 25.7℃)
+float buildMockAirTemperature(unsigned long index) {
+  const float base = 24.8f;
+  const int pattern = index % 4;
+  return base + (pattern - 1) * 0.6f;
+}
+
+// 2-4. 気圧 (例: 1011.4 hPa 〜 1015.0 hPa)
+float buildMockPressure(unsigned long index) {
+  const float base = 1013.2f;
+  const int pattern = index % 7;
+  return base + (pattern - 3) * 0.6f;
+}
+
 // 3. 土壌EC (例: 425 〜 575 us/cm)
 // ※ECは通常整数値のため、戻り値と変数を uint16_t にしていますが、形式は完全に踏襲しています。
 uint16_t buildMockEC(unsigned long index) {
@@ -219,11 +251,23 @@ uint16_t ecUsCm = 0;
 float phValue = 7.0;
 
 //--- 大気（BME280） ---
-  const float airHumidityPercent = bme.readHumidity();//湿度
-  const float temperatureCelsius = bme.readTemperature();//気温
-  const float pressurePascal =bme.readPressure() / 100.0F;//気圧
+  float airHumidityPercent = bme.readHumidity();//湿度
+  float temperatureCelsius = bme.readTemperature();//気温
+  float pressurePascal =bme.readPressure() / 100.0F;//気圧
+  if (isnan(airHumidityPercent) || airHumidityPercent < 0.0f || airHumidityPercent > 100.0f) {
+    airHumidityPercent = buildMockAirHumidity(readingIndex);
+  }
+  if (isnan(temperatureCelsius) || temperatureCelsius < -40.0f || temperatureCelsius > 80.0f) {
+    temperatureCelsius = buildMockAirTemperature(readingIndex);
+  }
+  if (isnan(pressurePascal) || pressurePascal <= 0.0f) {
+    pressurePascal = buildMockPressure(readingIndex);
+  }
 // --- 照度（BH1750） ---
-  const float lightLux = lightMeter.readLightLevel();
+  float lightLux = lightMeter.readLightLevel();
+  if (isnan(lightLux) || lightLux < 0.0f) {
+    lightLux = buildMockLight(readingIndex);
+  }
 // --- 土壌（SEN0604 4-in-1） ---
   // 自動切り替えモジュールなので、シンプルに読み取り要求を出すだけ
   uint8_t result = node.readHoldingRegisters(0x0000, 4);
@@ -261,9 +305,10 @@ float phValue = 7.0;
   payload["moisture_percent"] = roundf(soilMoisturePercent * 10.0f) / 10.0f;//土壌水分量（バックエンド互換）
   payload["air_humidity_percent"] = roundf(airHumidityPercent * 10.0f) / 10.0f;//大気湿度
   payload["light_lux"] = roundf(lightLux * 10.0f) / 10.0f;//照度
-  payload["temperature_celsius"] = (roundf(temperatureCelsius * 10.0f) / 10.0f)+(roundf(soilTemperatureCelsius * 10.0f) / 10.0f)/2;//気温
+  payload["temperature_celsius"] = roundf(((temperatureCelsius + soilTemperatureCelsius) / 2.0f) * 10.0f) / 10.0f;//気温
   payload["pressure_pascal"] = roundf(pressurePascal * 10.0f) / 10.0f;//気圧
   payload["soil_moisture_percent"] = roundf(soilMoisturePercent * 10.0f) / 10.0f;//土壌水分量
+  payload["soil_temperature_celsius"] = roundf(soilTemperatureCelsius * 10.0f) / 10.0f;//土壌温度
   payload["soil_ec_us_cm"] = roundf(ecUsCm * 10.0f) / 10.0f;//EC値
   payload["soil_ph_value"] = roundf(phValue * 10.0f) / 10.0f;//ph
 
@@ -320,7 +365,7 @@ void setup() {
   if (!lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE, 0x23, &Wire)) {
     Serial.println("BH1750が見つかりません。");
   }
-
+  lightMeter.setMTreg(31);
   // 3. RS485 (SEN0604) 初期化
   Serial2.begin(9600, SERIAL_8N1, RXD2, TXD2);
   node.begin(1, Serial2); // スレーブID 1を設定
