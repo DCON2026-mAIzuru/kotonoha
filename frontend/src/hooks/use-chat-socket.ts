@@ -45,7 +45,14 @@ export function useChatSocket(token: string, enabled: boolean) {
 
   const appendAssistantText = useCallback((text: string) => {
     setMessages((current) => {
-      const activeId = activeAssistantIdRef.current;
+      let activeId = activeAssistantIdRef.current;
+      if (!activeId) {
+        const pending = [...current].reverse().find((item) => item.role === 'assistant' && item.text === '');
+        if (pending) {
+          activeAssistantIdRef.current = pending.id;
+          activeId = pending.id;
+        }
+      }
       if (!activeId) {
         const newId = createId('assistant');
         activeAssistantIdRef.current = newId;
@@ -80,6 +87,7 @@ export function useChatSocket(token: string, enabled: boolean) {
       activeAssistantIdRef.current = null;
       assistantReplyDoneRef.current = false;
       typingProfileRef.current = null;
+      setMessages((current) => current.filter((message) => !(message.role === 'assistant' && message.text === '')));
     }
   }, [stopAssistantTypingInterval]);
 
@@ -214,6 +222,15 @@ export function useChatSocket(token: string, enabled: boolean) {
       if (payload.type === 'reply_start') {
         if (payload.source === 'sensor_event') {
           return;
+        }
+        if (!activeAssistantIdRef.current) {
+          setMessages((current) => {
+            const pending = [...current].reverse().find((item) => item.role === 'assistant' && item.text === '');
+            if (pending) {
+              activeAssistantIdRef.current = pending.id;
+            }
+            return current;
+          });
         }
         typingProfileRef.current = payload.typing ?? null;
         assistantTypingReadyRef.current = false;
