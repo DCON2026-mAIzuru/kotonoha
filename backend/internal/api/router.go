@@ -1,6 +1,7 @@
 package api
 
 import (
+	"strings"
 	"time"
 
 	"github.com/apple/kotonoha/backend/internal/api/handlers"
@@ -43,7 +44,11 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	profileHandler := handlers.NewProfileHandler(deps.ProfileService)
 	pushSubscriptionHandler := handlers.NewPushSubscriptionHandler(deps.PushSubscriptionService)
 	chatHandler := handlers.NewChatHandler(deps.ChatService, deps.RealtimeHub, deps.Config.BackendAllowedOrigin)
-	sensorHandler := handlers.NewSensorHandler(deps.SensorService, deps.Config.SensorSharedToken)
+	sensorHandler := handlers.NewSensorHandler(
+		deps.SensorService,
+		deps.Config.SensorSharedToken,
+		strings.EqualFold(deps.Config.PresentationDemoMode, "true"),
+	)
 	diagnosisHandler := handlers.NewDiagnosisHandler(deps.DiagnosisService, parsePositiveInt64(deps.Config.DiagnosisMaxImageMB, 8))
 	authMiddleware := middleware.RequireAuth(deps.JWTVerifier)
 
@@ -79,6 +84,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		sensorRoutes.GET("", sensorHandler.GetCurrent)
 		sensorRoutes.GET("/moisture-control", sensorHandler.GetMoistureControl)
 		sensorRoutes.PATCH("/moisture-control", sensorHandler.UpdateMoistureControl)
+		sensorRoutes.GET("/presentation-demo", sensorHandler.GetPresentationDemoStatus)
+		sensorRoutes.POST("/presentation-demo", sensorHandler.RunPresentationDemo)
 
 		apiV1.POST("/sensor", sensorHandler.Ingest)
 
