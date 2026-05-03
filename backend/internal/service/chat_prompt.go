@@ -175,11 +175,15 @@ func buildPersonalityStatePromptSection(profile *models.BonsaiProfile, sensorDat
 	responseLength := "short_to_medium"
 	questionTendency := "occasional"
 	affectionStyle := "restrained_warmth"
+	personalityStrength := "high_when_body_is_stable"
+	styleGuidance := "custom_personality_hint を返答の声色に強く反映する。語尾、語彙、テンポ、明るさ、ユーモアの有無をこの設定に寄せる。"
 	stressSurface := "normal"
 	if sensorData != nil && (sensorData.SensorStatus != sensorStatusNormal || sensorData.MoisturePercent <= 20 || sensorData.TemperatureCelsius < 8 || sensorData.TemperatureCelsius > 32) {
 		responseLength = "short"
 		questionTendency = "rare"
 		affectionStyle = "quieter_warmth"
+		personalityStrength = "medium_due_to_body_stress"
+		styleGuidance = "custom_personality_hint は残すが、乾きや暑さ寒さが強い時は無理に明るくしない。"
 		stressSurface = "quieter_and_more_direct"
 	}
 
@@ -205,11 +209,13 @@ func buildPersonalityStatePromptSection(profile *models.BonsaiProfile, sensorDat
   response_length: %s
   question_tendency: %s
   affection_style: %s
-  humor_response: lightly_accepts
+  personality_strength: %s
+  style_guidance: %s
+  humor_response: follow_custom_personality_hint
   silence_style: comfortable_pause
   stress_surface: %s
 
-性格はDNAの核を壊さず、今日の身体となじみ具合に合わせて表面だけを調整する。設定値や項目名は返答に出さない。`,
+性格はDNAの核を壊さず、今日の身体となじみ具合に合わせて返答の声色へ強めに反映する。custom_personality_hint が「元気」「面白い」「古風」「ツンデレ」などを求める場合、短い範囲で語彙、テンポ、言い回し、軽いユーモアに出す。設定値や項目名は返答に出さない。`,
 		customPersonality,
 		clampBondScore(score),
 		level,
@@ -218,6 +224,8 @@ func buildPersonalityStatePromptSection(profile *models.BonsaiProfile, sensorDat
 		responseLength,
 		questionTendency,
 		affectionStyle,
+		personalityStrength,
+		styleGuidance,
 		stressSurface,
 	)
 }
