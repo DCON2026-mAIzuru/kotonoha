@@ -16,6 +16,7 @@ type Config struct {
 	SupabaseDBURL          string
 	SupabaseJWTSecret      string
 	SensorSharedToken      string
+	PresentationDemoMode   string
 	GeminiAPIKey           string
 	GeminiModel            string
 	GeminiModelPriority    string
@@ -41,6 +42,7 @@ func Load() (*Config, error) {
 		SupabaseDBURL:          os.Getenv("SUPABASE_DB_URL"),
 		SupabaseJWTSecret:      os.Getenv("SUPABASE_JWT_SECRET"),
 		SensorSharedToken:      os.Getenv("SENSOR_SHARED_TOKEN"),
+		PresentationDemoMode:   getEnv("PRESENTATION_DEMO_MODE", getEnv("NEXT_PUBLIC_PRESENTATION_DEMO_MODE", "false")),
 		GeminiAPIKey:           os.Getenv("GEMINI_API_KEY"),
 		GeminiModel:            getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
 		GeminiModelPriority:    os.Getenv("GEMINI_MODEL_PRIORITY"),

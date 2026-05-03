@@ -297,3 +297,163 @@ func TestIngestTriggersLowMoisturePushNotification(t *testing.T) {
 		t.Fatal("expected LLM prompt to be built for low moisture event")
 	}
 }
+
+func TestGetPresentationCurrentFluctuatesSensorsWithoutSensorEvent(t *testing.T) {
+	store := &sensorServiceTestStore{
+		previous: &models.SensorData{
+			UserID:             "user-1",
+			DeviceID:           "sensor-1",
+			MoisturePercent:    45,
+			LightLux:           900,
+			TemperatureCelsius: 22,
+			RecordedAt:         time.Now().UTC().Add(-30 * time.Second),
+			SensorStatus:       sensorStatusNormal,
+			RawPayload: map[string]any{
+				"air_humidity_percent":     55.0,
+				"pressure_pascal":          1012.8,
+				"soil_temperature_celsius": 21.5,
+				"soil_ec_us_cm":            500.0,
+				"soil_ph_value":            6.5,
+			},
+		},
+		profile: &models.BonsaiProfile{
+			UserID:    "user-1",
+			Name:      "言の葉",
+			BondScore: 40,
+		},
+		subscriptions: []models.PushSubscription{{ID: "sub-1"}},
+	}
+	streamer := &sensorServiceTestStreamer{reply: "根元がほどけて、少し落ち着いたよ。"}
+	notifier := &sensorServiceTestNotifier{}
+	pushSender := &sensorServiceTestPushSender{}
+
+	service := NewSensorService(store, streamer, notifier, pushSender)
+
+	result, err := service.GetPresentationCurrent(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("GetPresentationCurrent returned error: %v", err)
+	}
+
+	if result == nil {
+		t.Fatal("expected presentation sensor data")
+	}
+	if result.MoisturePercent == 45 {
+		t.Fatal("expected moisture to fluctuate")
+	}
+	if result.LightLux == 900 {
+		t.Fatal("expected light to fluctuate")
+	}
+	if result.TemperatureCelsius == 22 {
+		t.Fatal("expected temperature to fluctuate")
+	}
+	for _, key := range []string{
+		"air_humidity_percent",
+		"pressure_pascal",
+		"soil_moisture_percent",
+		"soil_temperature_celsius",
+		"soil_ec_us_cm",
+		"soil_ph_value",
+	} {
+		if _, ok := result.RawPayload[key]; !ok {
+			t.Fatalf("expected raw payload to include %q: %#v", key, result.RawPayload)
+		}
+	}
+	if len(pushSender.payloads) != 0 {
+		t.Fatalf("expected no push notifications, got %#v", pushSender.payloads)
+	}
+	if len(store.createdHistory) != 0 {
+		t.Fatalf("expected no event history entries, got %d", len(store.createdHistory))
+	}
+	if len(notifier.messages) != 0 {
+		t.Fatalf("expected no realtime event messages, got %d", len(notifier.messages))
+	}
+}
+
+func TestRunPresentationDemoTriggersLowMoistureNotification(t *testing.T) {
+	store := &sensorServiceTestStore{
+		previous: &models.SensorData{
+			UserID:             "user-1",
+			DeviceID:           "sensor-1",
+			MoisturePercent:    45,
+			LightLux:           900,
+			TemperatureCelsius: 22,
+			RecordedAt:         time.Now().UTC().Add(-30 * time.Second),
+			SensorStatus:       sensorStatusNormal,
+			RawPayload: map[string]any{
+				"air_humidity_percent":     55.0,
+				"pressure_pascal":          1012.8,
+				"soil_temperature_celsius": 21.5,
+				"soil_ec_us_cm":            500.0,
+				"soil_ph_value":            6.5,
+			},
+		},
+		profile: &models.BonsaiProfile{
+			UserID:    "user-1",
+			Name:      "言の葉",
+			BondScore: 40,
+		},
+		subscriptions: []models.PushSubscription{{ID: "sub-1"}},
+	}
+	streamer := &sensorServiceTestStreamer{reply: "少し乾いてきたから、ひと口だけ水がほしい。"}
+	notifier := &sensorServiceTestNotifier{}
+	pushSender := &sensorServiceTestPushSender{}
+
+	service := NewSensorService(store, streamer, notifier, pushSender)
+
+	result, err := service.RunPresentationDemo(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("RunPresentationDemo returned error: %v", err)
+	}
+
+	if result.InitialReading == nil {
+		t.Fatal("expected initial reading to be stored")
+	}
+	if result.FinalResult == nil {
+		t.Fatalf("expected final result, got %#v", result.FinalResult)
+	}
+	if !result.FinalResult.EventTriggered {
+		t.Fatal("expected low moisture event")
+	}
+	if result.FinalResult.EventName != sensorEventNameLowMoisture {
+		t.Fatalf("expected event %q, got %q", sensorEventNameLowMoisture, result.FinalResult.EventName)
+	}
+	if result.Scenario != "low_moisture_notification" {
+		t.Fatalf("expected low moisture scenario, got %q", result.Scenario)
+	}
+	if result.MoistureBefore != 24 || result.MoistureAfter != 18 {
+		t.Fatalf("unexpected moisture values: before=%v after=%v", result.MoistureBefore, result.MoistureAfter)
+	}
+	if result.FinalResult.SensorData.MoisturePercent != 18 {
+		t.Fatalf("expected final sensor moisture 18, got %v", result.FinalResult.SensorData.MoisturePercent)
+	}
+	if result.FinalResult.PushSentCount != 1 {
+		t.Fatalf("expected 1 push notification, got %d", result.FinalResult.PushSentCount)
+	}
+	for _, key := range []string{
+		"air_humidity_percent",
+		"pressure_pascal",
+		"soil_moisture_percent",
+		"soil_temperature_celsius",
+		"soil_ec_us_cm",
+		"soil_ph_value",
+	} {
+		if _, ok := result.FinalResult.SensorData.RawPayload[key]; !ok {
+			t.Fatalf("expected raw payload to include %q: %#v", key, result.FinalResult.SensorData.RawPayload)
+		}
+	}
+	if result.FinalResult.SensorData.RawPayload["air_humidity_percent"] == 55.0 {
+		t.Fatal("expected air humidity to fluctuate")
+	}
+	if result.FinalResult.SensorData.RawPayload["soil_ec_us_cm"] == 500.0 {
+		t.Fatal("expected soil EC to fluctuate")
+	}
+	if len(pushSender.payloads) != 1 || pushSender.payloads[0].Event != sensorEventNameLowMoisture {
+		t.Fatalf("expected low moisture push notification, got %#v", pushSender.payloads)
+	}
+	if len(store.createdHistory) != 1 {
+		t.Fatalf("expected 1 event history entry, got %d", len(store.createdHistory))
+	}
+	if len(notifier.messages) != 2 {
+		t.Fatalf("expected 2 realtime event messages, got %d", len(notifier.messages))
+	}
+}

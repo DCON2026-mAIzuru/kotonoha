@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -70,6 +71,7 @@ type IngestSensorInput struct {
 	TemperatureCelsius  float64   `json:"temperature_celsius"`
 	PressurePascal      *float64  `json:"pressure_pascal"`
 	SoilMoisturePercent *float64  `json:"soil_moisture_percent"`
+	SoilTemperatureC    *float64  `json:"soil_temperature_celsius"`
 	SoilECUsCm          *float64  `json:"soil_ec_us_cm"`
 	SoilPHValue         *float64  `json:"soil_ph_value"`
 }
@@ -81,6 +83,14 @@ type IngestSensorResult struct {
 	EventMessage        string             `json:"event_message,omitempty"`
 	PushSentCount       int                `json:"push_sent_count,omitempty"`
 	NotificationWarning string             `json:"notification_warning,omitempty"`
+}
+
+type PresentationDemoResult struct {
+	InitialReading *models.SensorData  `json:"initial_reading"`
+	FinalResult    *IngestSensorResult `json:"final_result"`
+	MoistureBefore float64             `json:"moisture_before"`
+	MoistureAfter  float64             `json:"moisture_after"`
+	Scenario       string              `json:"scenario"`
 }
 
 type MoistureControl struct {
@@ -98,6 +108,22 @@ type moistureControlState struct {
 	Paused      bool
 	ManualValue *float64
 	UpdatedAt   time.Time
+}
+
+type ingestOptions struct {
+	BypassEventCooldown bool
+	SuppressEvents      bool
+}
+
+type presentationSensorValues struct {
+	Moisture        float64
+	Light           float64
+	Temperature     float64
+	AirHumidity     float64
+	Pressure        float64
+	SoilTemperature float64
+	SoilEC          float64
+	SoilPH          float64
 }
 
 func NewSensorService(store sensorStore, llmStreamer chatLLMStreamer, notifier sensorNotifier, pushSender sensorPushSender) *SensorService {
@@ -133,6 +159,40 @@ func (s *SensorService) GetCurrent(ctx context.Context, userID string) (*models.
 	}
 
 	return s.applyMoistureControl(userID, sensorData), nil
+}
+
+func (s *SensorService) GetPresentationCurrent(ctx context.Context, userID string) (*models.SensorData, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("センサーサービスが設定されていません")
+	}
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("センサーユーザーIDが空です")
+	}
+
+	current, err := s.store.GetSensorDataByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	values := presentationSensorValuesFromCurrent(current)
+	values.Moisture = nextFluctuatedMoisture(values.Moisture, now)
+	values.Light = nextFluctuatedLight(values.Light, now)
+	values.Temperature = nextFluctuatedTemperature(values.Temperature, now)
+	values.AirHumidity = nextFluctuatedAirHumidity(values.AirHumidity, now)
+	values.Pressure = nextFluctuatedPressure(values.Pressure, now)
+	values.SoilTemperature = nextFluctuatedTemperature(values.SoilTemperature, now.Add(time.Second))
+	values.SoilEC = nextFluctuatedEC(values.SoilEC, now)
+	values.SoilPH = nextFluctuatedPH(values.SoilPH, now)
+
+	result, err := s.ingest(ctx, presentationSensorInput(userID, values, now), ingestOptions{SuppressEvents: true})
+	if err != nil {
+		return nil, err
+	}
+
+	return result.SensorData, nil
 }
 
 func (s *SensorService) GetMoistureControl(_ context.Context, userID string) (*MoistureControl, error) {
@@ -228,6 +288,63 @@ func (s *SensorService) UpdateMoistureControl(ctx context.Context, userID string
 }
 
 func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*IngestSensorResult, error) {
+	return s.ingest(ctx, input, ingestOptions{})
+}
+
+func (s *SensorService) RunPresentationDemo(ctx context.Context, userID string) (*PresentationDemoResult, error) {
+	if s == nil || s.store == nil {
+		return nil, errors.New("センサーサービスが設定されていません")
+	}
+
+	userID = strings.TrimSpace(userID)
+	if userID == "" {
+		return nil, errors.New("センサーユーザーIDが空です")
+	}
+
+	s.mu.Lock()
+	delete(s.controls, userID)
+	s.mu.Unlock()
+
+	current, err := s.store.GetSensorDataByUserID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+	values := presentationSensorValuesFromCurrent(current)
+	beforeMoisture := 24.0
+	afterMoisture := 18.0
+
+	values.Moisture = beforeMoisture
+	initialResult, err := s.ingest(ctx, presentationSensorInput(userID, values, now), ingestOptions{SuppressEvents: true})
+	if err != nil {
+		return nil, err
+	}
+
+	values.Moisture = afterMoisture
+	values.Light = nextFluctuatedLight(values.Light, now)
+	values.Temperature = nextFluctuatedTemperature(values.Temperature, now)
+	values.AirHumidity = nextFluctuatedAirHumidity(values.AirHumidity, now)
+	values.Pressure = nextFluctuatedPressure(values.Pressure, now)
+	values.SoilTemperature = nextFluctuatedTemperature(values.SoilTemperature, now.Add(time.Second))
+	values.SoilEC = nextFluctuatedEC(values.SoilEC, now)
+	values.SoilPH = nextFluctuatedPH(values.SoilPH, now)
+
+	finalResult, err := s.ingest(ctx, presentationSensorInput(userID, values, now), ingestOptions{BypassEventCooldown: true})
+	if err != nil {
+		return nil, err
+	}
+
+	return &PresentationDemoResult{
+		InitialReading: initialResult.SensorData,
+		FinalResult:    finalResult,
+		MoistureBefore: beforeMoisture,
+		MoistureAfter:  afterMoisture,
+		Scenario:       "low_moisture_notification",
+	}, nil
+}
+
+func (s *SensorService) ingest(ctx context.Context, input IngestSensorInput, options ingestOptions) (*IngestSensorResult, error) {
 	if s == nil || s.store == nil {
 		return nil, errors.New("センサーサービスが設定されていません")
 	}
@@ -256,6 +373,8 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		return nil, errors.New("pressure_pascal が不正です")
 	case invalidOptionalFloat(input.SoilMoisturePercent):
 		return nil, errors.New("soil_moisture_percent が不正です")
+	case invalidOptionalFloat(input.SoilTemperatureC):
+		return nil, errors.New("soil_temperature_celsius が不正です")
 	case invalidOptionalFloat(input.SoilECUsCm):
 		return nil, errors.New("soil_ec_us_cm が不正です")
 	case invalidOptionalFloat(input.SoilPHValue):
@@ -293,6 +412,7 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 	addOptionalRawPayloadFloat(rawPayload, "air_humidity_percent", airHumidityPercent(input, rawMoisturePercent))
 	addOptionalRawPayloadFloat(rawPayload, "pressure_pascal", input.PressurePascal)
 	addOptionalRawPayloadFloat(rawPayload, "soil_moisture_percent", input.SoilMoisturePercent)
+	addOptionalRawPayloadFloat(rawPayload, "soil_temperature_celsius", input.SoilTemperatureC)
 	addOptionalRawPayloadFloat(rawPayload, "soil_ec_us_cm", input.SoilECUsCm)
 	addOptionalRawPayloadFloat(rawPayload, "soil_ph_value", input.SoilPHValue)
 	if control.Paused {
@@ -320,6 +440,10 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 		SensorData: sensorData,
 	}
 
+	if options.SuppressEvents {
+		return result, nil
+	}
+
 	eventName := detectSensorEvent(previous, sensorData)
 	if eventName == "" {
 		return result, nil
@@ -329,7 +453,7 @@ func (s *SensorService) Ingest(ctx context.Context, input IngestSensorInput) (*I
 	if err != nil {
 		return nil, err
 	}
-	if latestEvent != nil && time.Since(latestEvent.CreatedAt) < sensorEventCooldown {
+	if !options.BypassEventCooldown && latestEvent != nil && time.Since(latestEvent.CreatedAt) < sensorEventCooldown {
 		return result, nil
 	}
 
@@ -674,6 +798,142 @@ func clampFloat(value float64, min float64, max float64) float64 {
 	}
 
 	return value
+}
+
+func nextFluctuatedMoisture(current float64, now time.Time) float64 {
+	current = clampFloat(current, 0, 100)
+
+	delta := 7.0
+	if now.Unix()%2 == 0 {
+		delta = -7.0
+	}
+	if current <= 12 {
+		delta = 7.0
+	}
+	if current >= 88 {
+		delta = -7.0
+	}
+
+	return math.Round(clampFloat(current+delta, 0, 100)*10) / 10
+}
+
+func presentationSensorValuesFromCurrent(current *models.SensorData) presentationSensorValues {
+	values := presentationSensorValues{
+		Moisture:        48.0,
+		Light:           1800.0,
+		Temperature:     24.0,
+		AirHumidity:     56.0,
+		Pressure:        1013.2,
+		SoilTemperature: 23.4,
+		SoilEC:          520.0,
+		SoilPH:          6.6,
+	}
+	if current == nil {
+		return values
+	}
+
+	values.Moisture = current.MoisturePercent
+	values.Light = current.LightLux
+	values.Temperature = current.TemperatureCelsius
+	values.AirHumidity = rawPayloadFloat(current.RawPayload, "air_humidity_percent", values.AirHumidity)
+	values.Pressure = rawPayloadFloat(current.RawPayload, "pressure_pascal", values.Pressure)
+	values.SoilTemperature = rawPayloadFloat(current.RawPayload, "soil_temperature_celsius", values.SoilTemperature)
+	values.SoilEC = rawPayloadFloat(current.RawPayload, "soil_ec_us_cm", values.SoilEC)
+	values.SoilPH = rawPayloadFloat(current.RawPayload, "soil_ph_value", values.SoilPH)
+	return values
+}
+
+func presentationSensorInput(userID string, values presentationSensorValues, recordedAt time.Time) IngestSensorInput {
+	return IngestSensorInput{
+		UserID:              userID,
+		DeviceID:            "ことの葉01",
+		RecordedAt:          recordedAt,
+		MoisturePercent:     values.Moisture,
+		AirHumidityPercent:  float64Pointer(values.AirHumidity),
+		LightLux:            values.Light,
+		TemperatureCelsius:  values.Temperature,
+		PressurePascal:      float64Pointer(values.Pressure),
+		SoilMoisturePercent: float64Pointer(values.Moisture),
+		SoilTemperatureC:    float64Pointer(values.SoilTemperature),
+		SoilECUsCm:          float64Pointer(values.SoilEC),
+		SoilPHValue:         float64Pointer(values.SoilPH),
+	}
+}
+
+func nextFluctuatedLight(current float64, now time.Time) float64 {
+	current = math.Max(current, 0)
+	delta := 180.0
+	if now.Unix()%2 == 0 {
+		delta = -180.0
+	}
+	return math.Round(math.Max(current+delta, 0)*10) / 10
+}
+
+func nextFluctuatedTemperature(current float64, now time.Time) float64 {
+	delta := 0.4
+	if now.Unix()%2 == 0 {
+		delta = -0.4
+	}
+	return math.Round(clampFloat(current+delta, -50, 100)*10) / 10
+}
+
+func nextFluctuatedAirHumidity(current float64, now time.Time) float64 {
+	delta := 2.3
+	if now.Unix()%2 == 0 {
+		delta = -2.3
+	}
+	return math.Round(clampFloat(current+delta, 0, 100)*10) / 10
+}
+
+func nextFluctuatedPressure(current float64, now time.Time) float64 {
+	delta := 0.8
+	if now.Unix()%2 == 0 {
+		delta = -0.8
+	}
+	return math.Round(math.Max(current+delta, 0)*10) / 10
+}
+
+func nextFluctuatedEC(current float64, now time.Time) float64 {
+	delta := 18.0
+	if now.Unix()%2 == 0 {
+		delta = -18.0
+	}
+	return math.Round(math.Max(current+delta, 0)*10) / 10
+}
+
+func nextFluctuatedPH(current float64, now time.Time) float64 {
+	delta := 0.05
+	if now.Unix()%2 == 0 {
+		delta = -0.05
+	}
+	return math.Round(clampFloat(current+delta, 0, 14)*100) / 100
+}
+
+func rawPayloadFloat(payload map[string]any, key string, fallback float64) float64 {
+	if payload == nil {
+		return fallback
+	}
+	switch value := payload[key].(type) {
+	case float64:
+		if !math.IsNaN(value) && !math.IsInf(value, 0) {
+			return value
+		}
+	case float32:
+		converted := float64(value)
+		if !math.IsNaN(converted) && !math.IsInf(converted, 0) {
+			return converted
+		}
+	case int:
+		return float64(value)
+	case int64:
+		return float64(value)
+	case json.Number:
+		parsed, err := value.Float64()
+		if err == nil && !math.IsNaN(parsed) && !math.IsInf(parsed, 0) {
+			return parsed
+		}
+	}
+	return fallback
 }
 
 func buildWateringSystemPrompt(profile *models.BonsaiProfile) string {

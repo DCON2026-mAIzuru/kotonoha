@@ -18,12 +18,14 @@ const (
 type SensorHandler struct {
 	sensorService     *service.SensorService
 	sensorSharedToken string
+	presentationDemo  bool
 }
 
-func NewSensorHandler(sensorService *service.SensorService, sensorSharedToken string) *SensorHandler {
+func NewSensorHandler(sensorService *service.SensorService, sensorSharedToken string, presentationDemo bool) *SensorHandler {
 	return &SensorHandler{
 		sensorService:     sensorService,
 		sensorSharedToken: strings.TrimSpace(sensorSharedToken),
+		presentationDemo:  presentationDemo,
 	}
 }
 
@@ -39,7 +41,13 @@ func (h *SensorHandler) GetCurrent(c *gin.Context) {
 		return
 	}
 
-	sensorData, err := h.sensorService.GetCurrent(c.Request.Context(), user.ID)
+	var sensorData any
+	var err error
+	if h.presentationDemo {
+		sensorData, err = h.sensorService.GetPresentationCurrent(c.Request.Context(), user.ID)
+	} else {
+		sensorData, err = h.sensorService.GetCurrent(c.Request.Context(), user.ID)
+	}
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
 		return
@@ -105,6 +113,41 @@ func (h *SensorHandler) UpdateMoistureControl(c *gin.Context) {
 
 	c.JSON(http.StatusOK, gin.H{
 		"moisture_control": control,
+	})
+}
+
+func (h *SensorHandler) GetPresentationDemoStatus(c *gin.Context) {
+	c.JSON(http.StatusOK, gin.H{
+		"presentation_demo": gin.H{
+			"enabled": h.presentationDemo,
+		},
+	})
+}
+
+func (h *SensorHandler) RunPresentationDemo(c *gin.Context) {
+	if h.sensorService == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "センサーサービスが初期化されていません"})
+		return
+	}
+	if !h.presentationDemo {
+		c.JSON(http.StatusNotFound, gin.H{"message": "発表用操作は無効です"})
+		return
+	}
+
+	user, ok := middleware.CurrentUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "認証ユーザーが見つかりません"})
+		return
+	}
+
+	result, err := h.sensorService.RunPresentationDemo(c.Request.Context(), user.ID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"result": result,
 	})
 }
 
