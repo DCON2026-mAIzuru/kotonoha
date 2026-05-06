@@ -47,8 +47,17 @@ func main() {
 	realtimeHub := realtime.NewHub()
 	pushSender := pushtransport.NewSender(cfg.VapidPublicKey, cfg.VapidPrivateKey, cfg.VapidSubject)
 	dlTimeoutSeconds := parsePositiveInt(cfg.DLServiceTimeout, 90)
+	voicevoxTimeoutSeconds := parsePositiveInt(cfg.VoicevoxTimeout, 30)
 	diagnosisMaxImageMB := int64(parsePositiveInt(cfg.DiagnosisMaxImageMB, 8))
 	dlClient := dlclient.New(cfg.DLServiceURL, time.Duration(dlTimeoutSeconds)*time.Second)
+	voicevoxService := service.NewVoicevoxService(
+		cfg.VoicevoxEngineURL,
+		cfg.VoicevoxSpeakerID,
+		cfg.VoicevoxSpeakerName,
+		cfg.VoicevoxStyleName,
+		cfg.VoicevoxSpeedScale,
+		time.Duration(voicevoxTimeoutSeconds)*time.Second,
+	)
 
 	deps := api.Dependencies{
 		Config:                  cfg,
@@ -58,6 +67,7 @@ func main() {
 		ChatService:             service.NewChatService(store, llmStreamer, llmEmbedder),
 		SensorService:           service.NewSensorService(store, llmStreamer, realtimeHub, pushSender),
 		DiagnosisService:        service.NewDiagnosisService(store, dlClient, diagnosisMaxImageMB, cfg.DiagnosisArtifactDir),
+		VoicevoxService:         voicevoxService,
 		RealtimeHub:             realtimeHub,
 		JWTVerifier:             verifier,
 	}

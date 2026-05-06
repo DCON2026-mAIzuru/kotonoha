@@ -496,6 +496,70 @@ button { appearance: none; }
 
 .k-lang-toggle-on .k-lang-thumb { transform: translateX(18px); }
 
+.k-voice-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px 5px 9px;
+  border: 1px solid rgba(54, 43, 31, 0.06);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.k-voice-label {
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1;
+  user-select: none;
+}
+
+.k-voice-toggle,
+.k-voice-stop-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  color: #756f63;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease, opacity 180ms ease;
+}
+
+.k-voice-toggle {
+  background: rgba(113, 134, 186, 0.18);
+}
+
+.k-voice-toggle-on {
+  background: rgba(88, 127, 92, 0.22);
+  color: #4d7051;
+}
+
+.k-voice-stop-btn {
+  background: rgba(54, 43, 31, 0.05);
+}
+
+.k-voice-toggle:disabled,
+.k-voice-stop-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.k-voice-toggle svg,
+.k-voice-stop-btn svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
+.k-voice-error {
+  color: #a95f5f;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
 /* Sensor board */
 .k-sensor-board {
   margin-top: 8px;
@@ -743,8 +807,8 @@ button { appearance: none; }
 .k-message p {
   margin: 0;
   white-space: pre-wrap;
-  font-size: 0.88rem;
-  line-height: 1.65;
+  font-size: 1rem;
+  line-height: 1.72;
 }
 
 .k-message-meta {
@@ -869,8 +933,8 @@ button { appearance: none; }
   background: rgba(255, 255, 255, 0.66);
   color: var(--text);
   outline: none;
-  font-size: 0.88rem;
-  line-height: 1.55;
+  font-size: 1rem;
+  line-height: 1.62;
 }
 
 .k-composer textarea:focus {
@@ -1571,8 +1635,8 @@ button { appearance: none; }
     overflow-y: auto;
     overscroll-behavior: contain;
   }
-  .k-message { max-width: 94%; padding: 9px 10px; }
-  .k-message p { font-size: 0.82rem; line-height: 1.62; }
+  .k-message { max-width: 94%; padding: 10px 11px; }
+  .k-message p { font-size: 0.95rem; line-height: 1.68; }
   .k-message-list { padding: 5px 7px 7px; }
   .k-prompt-row {
     flex-wrap: nowrap;
@@ -1587,7 +1651,7 @@ button { appearance: none; }
     padding: 5px 0 0;
     background: transparent;
   }
-  .k-composer textarea { min-height: 46px; max-height: 12dvh; font-size: 0.82rem; }
+  .k-composer textarea { min-height: 52px; max-height: 14dvh; font-size: 0.95rem; line-height: 1.58; }
   .k-composer-footer {
     margin-top: 4px;
     display: grid;

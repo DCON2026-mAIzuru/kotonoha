@@ -28,6 +28,12 @@ type Config struct {
 	DLServiceTimeout       string
 	DiagnosisMaxImageMB    string
 	DiagnosisArtifactDir   string
+	VoicevoxEngineURL      string
+	VoicevoxSpeakerID      string
+	VoicevoxSpeakerName    string
+	VoicevoxStyleName      string
+	VoicevoxSpeedScale     string
+	VoicevoxTimeout        string
 }
 
 func Load() (*Config, error) {
@@ -54,6 +60,12 @@ func Load() (*Config, error) {
 		DLServiceTimeout:       getEnv("DL_SERVICE_TIMEOUT_SECONDS", "90"),
 		DiagnosisMaxImageMB:    getEnv("DIAGNOSIS_MAX_IMAGE_MB", "8"),
 		DiagnosisArtifactDir:   getEnv("DIAGNOSIS_ARTIFACT_DIR", "/tmp/kotonoha-diagnosis-artifacts"),
+		VoicevoxEngineURL:      getEnv("VOICEVOX_ENGINE_URL", "http://127.0.0.1:50021"),
+		VoicevoxSpeakerID:      getEnv("VOICEVOX_SPEAKER_ID", "13"),
+		VoicevoxSpeakerName:    getEnv("VOICEVOX_SPEAKER_NAME", "青山龍星"),
+		VoicevoxStyleName:      getEnv("VOICEVOX_STYLE_NAME", "ノーマル"),
+		VoicevoxSpeedScale:     getEnv("VOICEVOX_SPEED_SCALE", "1.12"),
+		VoicevoxTimeout:        getEnv("VOICEVOX_TIMEOUT_SECONDS", "30"),
 	}
 
 	if err := cfg.validate(); err != nil {

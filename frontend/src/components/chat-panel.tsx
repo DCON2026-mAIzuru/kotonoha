@@ -1,9 +1,11 @@
 'use client';
 
 import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Square, Volume2, VolumeX } from 'lucide-react';
 import { getCurrentSensorData, getMoistureControl, getPresentationDemoStatus, runPresentationDemo, updateMoistureControl, uploadDiagnosisImage } from '@/lib/backend-api';
 import type { BonsaiDiagnosis, MoistureControl, SensorData } from '@/types/api';
 import { useChatSocket } from '@/hooks/use-chat-socket';
+import { useVoicevoxSpeech } from '@/hooks/use-voicevox-speech';
 
 interface ChatPanelProps {
   token: string;
@@ -115,7 +117,17 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   const listRef = useRef<HTMLDivElement>(null);
   const diagnosisInputRef = useRef<HTMLInputElement>(null);
 
-  const { messages, status, errorMessage, sendMessage } = useChatSocket(token, true);
+  const speech = useVoicevoxSpeech(token);
+  const handleAssistantReplyChunk = useCallback((text: string) => {
+    speech.enqueueStreamingText(text);
+  }, [speech]);
+  const handleAssistantReplyDone = useCallback(() => {
+    speech.finishStreamingText();
+  }, [speech]);
+  const { messages, status, errorMessage, sendMessage } = useChatSocket(token, true, {
+    onAssistantReplyChunk: handleAssistantReplyChunk,
+    onAssistantReplyDone: handleAssistantReplyDone,
+  });
   const isStreaming = useMemo(() => messages.some((m) => m.role === 'assistant' && m.text === ''), [messages]);
   const presentationActionReady = PRESENTATION_ACTION_ENABLED && presentationActionApiEnabled === true;
   const presentAsConnected = presentationActionReady && (!sensorData || sensorData.sensor_status === 'stale' || Boolean(sensorError));
@@ -265,11 +277,16 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (sendMessage(input)) setInput('');
+    if (sendMessage(input)) {
+      speech.stop();
+      setInput('');
+    }
   };
 
   const handleQuickPrompt = (prompt: string) => {
-    sendMessage(prompt);
+    if (sendMessage(prompt)) {
+      speech.stop();
+    }
   };
 
   const openDiagnosisCapture = () => {
@@ -391,6 +408,34 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
     }
   };
 
+  const renderVoiceControls = () => (
+    <div className="k-voice-controls" aria-label="音声読み上げ">
+      <span className="k-voice-label">音声</span>
+      <button
+        type="button"
+        className={`k-voice-toggle${speech.enabled ? ' k-voice-toggle-on' : ''}`}
+        role="switch"
+        aria-checked={speech.enabled}
+        aria-label={speech.enabled ? '音声読み上げをオフにする' : '音声読み上げをオンにする'}
+        title={speech.supported ? 'VOICEVOXで読み上げ' : 'このブラウザは音声再生に対応していません'}
+        disabled={!speech.supported}
+        onClick={() => speech.setEnabled(!speech.enabled)}
+      >
+        {speech.enabled ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
+      </button>
+      <button
+        type="button"
+        className="k-voice-stop-btn"
+        aria-label="読み上げを停止する"
+        title="停止"
+        disabled={!speech.enabled || !speech.speaking}
+        onClick={speech.stop}
+      >
+        <Square aria-hidden="true" />
+      </button>
+    </div>
+  );
+
   return (
     <section className="k-panel">
       <div className="k-chat">
@@ -413,6 +458,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
           </div>
 
           <div className="k-chat-header-side">
+            {renderVoiceControls()}
             {/* Language switcher */}
             <div className="k-lang-switcher">
               <span className={`k-lang-opt${language === 'ja' ? ' k-lang-opt-active' : ''}`}>
@@ -479,6 +525,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
               English
             </span>
           </div>
+          {renderVoiceControls()}
         </section>
 
         <section className={`k-sensor-board${mobileSensorOpen ? ' k-sensor-board-mobile-open' : ''}`}>
@@ -724,6 +771,9 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
                 : (errorMessage || visibleSensorError || diagnosisMessage || backendStatusText)}
             </p>
             <div className="k-composer-actions">
+              {speech.errorMessage && (
+                <span className="k-voice-error">{speech.errorMessage}</span>
+              )}
               <input
                 ref={diagnosisInputRef}
                 type="file"

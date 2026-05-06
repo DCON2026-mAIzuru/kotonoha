@@ -22,6 +22,7 @@ type Dependencies struct {
 	ChatService             *service.ChatService
 	SensorService           *service.SensorService
 	DiagnosisService        *service.DiagnosisService
+	VoicevoxService         *service.VoicevoxService
 	RealtimeHub             *realtime.Hub
 	JWTVerifier             *pkgauth.SupabaseJWTVerifier
 }
@@ -50,6 +51,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		strings.EqualFold(deps.Config.PresentationDemoMode, "true"),
 	)
 	diagnosisHandler := handlers.NewDiagnosisHandler(deps.DiagnosisService, parsePositiveInt64(deps.Config.DiagnosisMaxImageMB, 8))
+	ttsHandler := handlers.NewTTSHandler(deps.VoicevoxService)
 	authMiddleware := middleware.RequireAuth(deps.JWTVerifier)
 
 	engine.GET("/healthz", healthHandler.Liveness)
@@ -95,6 +97,10 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		diagnosisRoutes.GET("/latest", diagnosisHandler.Latest)
 		diagnosisRoutes.GET("/history", diagnosisHandler.History)
 		diagnosisRoutes.GET("/artifacts/:id/:kind", diagnosisHandler.Artifact)
+
+		ttsRoutes := apiV1.Group("/tts")
+		ttsRoutes.Use(authMiddleware)
+		ttsRoutes.POST("/voicevox", ttsHandler.Voicevox)
 	}
 
 	return engine

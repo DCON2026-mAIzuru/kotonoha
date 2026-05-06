@@ -72,6 +72,39 @@ async function authBlobFetch(token: string, path: string): Promise<Blob> {
   return response.blob();
 }
 
+async function authBlobPost(
+  token: string,
+  path: string,
+  body: JsonBody,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const response = await fetch(`${apiBaseUrl}${path}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(body),
+    cache: 'no-store',
+    signal,
+  });
+
+  if (!response.ok) {
+    let message = `APIエラー: ${response.status}`;
+    try {
+      const json = (await response.json()) as { message?: string };
+      if (json.message) {
+        message = json.message;
+      }
+    } catch {
+      // JSONでないレスポンスはHTTPステータスをそのまま使う。
+    }
+    throw new Error(message);
+  }
+
+  return response.blob();
+}
+
 export async function getProfile(token: string): Promise<BonsaiProfile | null> {
   const payload = await authFetch<{ profile: BonsaiProfile | null }>(token, '/api/v1/profile');
   return payload.profile;
@@ -148,6 +181,14 @@ export async function getLatestDiagnosis(token: string): Promise<BonsaiDiagnosis
 
 export async function getDiagnosisArtifact(token: string, path: string): Promise<Blob> {
   return authBlobFetch(token, path);
+}
+
+export async function synthesizeVoicevoxSpeech(
+  token: string,
+  text: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  return authBlobPost(token, '/api/v1/tts/voicevox', { text }, signal);
 }
 
 export async function upsertPushSubscription(

@@ -8,6 +8,12 @@ import { resolveWebSocketUrl } from '@/lib/ws-url';
 const defaultWsUrl = process.env.NEXT_PUBLIC_WS_URL || '';
 const defaultApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
+type UseChatSocketOptions = {
+  onAssistantReplyComplete?: (text: string) => void;
+  onAssistantReplyChunk?: (text: string) => void;
+  onAssistantReplyDone?: () => void;
+};
+
 function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
@@ -25,7 +31,7 @@ function resolveApiBaseUrl(): string {
   return 'http://localhost:8080';
 }
 
-export function useChatSocket(token: string, enabled: boolean) {
+export function useChatSocket(token: string, enabled: boolean, options?: UseChatSocketOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<'idle' | 'connecting' | 'open' | 'closed' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
@@ -42,6 +48,16 @@ export function useChatSocket(token: string, enabled: boolean) {
   const assistantTypingTimerRef = useRef<number | null>(null);
   const assistantTypingIntervalRef = useRef<number | null>(null);
   const typingProfileRef = useRef<TypingProfile | null>(null);
+  const assistantFullTextRef = useRef('');
+  const onAssistantReplyCompleteRef = useRef<UseChatSocketOptions['onAssistantReplyComplete']>(undefined);
+  const onAssistantReplyChunkRef = useRef<UseChatSocketOptions['onAssistantReplyChunk']>(undefined);
+  const onAssistantReplyDoneRef = useRef<UseChatSocketOptions['onAssistantReplyDone']>(undefined);
+
+  useEffect(() => {
+    onAssistantReplyCompleteRef.current = options?.onAssistantReplyComplete;
+    onAssistantReplyChunkRef.current = options?.onAssistantReplyChunk;
+    onAssistantReplyDoneRef.current = options?.onAssistantReplyDone;
+  }, [options?.onAssistantReplyChunk, options?.onAssistantReplyComplete, options?.onAssistantReplyDone]);
 
   const appendAssistantText = useCallback((text: string) => {
     setMessages((current) => {
@@ -83,10 +99,15 @@ export function useChatSocket(token: string, enabled: boolean) {
 
   const finishAssistantIfReady = useCallback(() => {
     if (assistantReplyDoneRef.current && assistantCharQueueRef.current.length === 0) {
+      const completedText = assistantFullTextRef.current.trim();
       stopAssistantTypingInterval();
       activeAssistantIdRef.current = null;
       assistantReplyDoneRef.current = false;
+      assistantFullTextRef.current = '';
       typingProfileRef.current = null;
+      if (completedText !== '') {
+        onAssistantReplyCompleteRef.current?.(completedText);
+      }
       setMessages((current) => current.filter((message) => !(message.role === 'assistant' && message.text === '')));
     }
   }, [stopAssistantTypingInterval]);
@@ -121,6 +142,7 @@ export function useChatSocket(token: string, enabled: boolean) {
     assistantCharQueueRef.current = [];
     assistantTypingReadyRef.current = true;
     assistantReplyDoneRef.current = false;
+    assistantFullTextRef.current = '';
     typingProfileRef.current = null;
   }, [stopAssistantTypingInterval]);
 
@@ -215,6 +237,8 @@ export function useChatSocket(token: string, enabled: boolean) {
           appendChunk('event', payload.text);
           return;
         }
+        assistantFullTextRef.current += payload.text;
+        onAssistantReplyChunkRef.current?.(payload.text);
         enqueueAssistantChunk(payload.text);
         return;
       }
@@ -232,6 +256,7 @@ export function useChatSocket(token: string, enabled: boolean) {
             return current;
           });
         }
+        assistantFullTextRef.current = '';
         typingProfileRef.current = payload.typing ?? null;
         assistantTypingReadyRef.current = false;
         assistantReplyDoneRef.current = false;
@@ -252,6 +277,7 @@ export function useChatSocket(token: string, enabled: boolean) {
           return;
         }
         assistantReplyDoneRef.current = true;
+        onAssistantReplyDoneRef.current?.();
         finishAssistantIfReady();
         activeEventIdRef.current = null;
         return;
