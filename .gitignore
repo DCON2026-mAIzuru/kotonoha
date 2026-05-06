@@ -15,6 +15,7 @@ coverage/
 bin/
 dist/
 *.test
+backend/tmp/
 
 # Supabase local state
 .supabase/
