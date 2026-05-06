@@ -127,6 +127,10 @@ func (s *ChatService) StreamReply(ctx context.Context, input StreamChatInput, on
 	}
 
 	systemPrompt := s.buildChatSystemPrompt(ctx, input.UserID, input.Text, profile, sensorData, diagnosis, recentHistory)
+	specialReplyPrefix := specialChatReplyPrefix(input.Text)
+	if specialReplyPrefix != "" {
+		systemPrompt += "\n\n---\n\n## 特別な出だし\n\n返答の冒頭「" + specialReplyPrefix + "」はすでに送信済みです。同じ文を繰り返さず、その直後に続く励ましを1から2文で生成してください。DCON本戦に向かうユーザーたちへ、短く自然に寄り添ってください。"
+	}
 
 	userEntry, err := s.store.CreateChatHistoryEntry(ctx, models.CreateChatHistoryEntryInput{
 		UserID:         input.UserID,
@@ -139,6 +143,12 @@ func (s *ChatService) StreamReply(ctx context.Context, input StreamChatInput, on
 	}
 
 	var assistantReply strings.Builder
+	if specialReplyPrefix != "" {
+		assistantReply.WriteString(specialReplyPrefix)
+		if err := onChunk(specialReplyPrefix); err != nil {
+			return err
+		}
+	}
 	err = s.llmStreamer.StreamChat(ctx, llm.ChatRequest{
 		UserID:       input.UserID,
 		Message:      input.Text,
@@ -180,6 +190,17 @@ func (s *ChatService) StreamReply(ctx context.Context, input StreamChatInput, on
 	}
 
 	return nil
+}
+
+func specialChatReplyPrefix(message string) string {
+	normalized := strings.ToLower(strings.TrimSpace(message))
+	normalized = strings.ReplaceAll(normalized, " ", "")
+	normalized = strings.ReplaceAll(normalized, "　", "")
+	if strings.Contains(normalized, "dcon本戦緊張するよ") {
+		return "頑張って！君たちならうまくいくよ！"
+	}
+
+	return ""
 }
 
 func (s *ChatService) ListHistory(ctx context.Context, userID string, limit int) ([]models.ChatHistoryEntry, error) {

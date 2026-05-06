@@ -74,9 +74,11 @@ func (s *chatServiceTestStore) UpdateBonsaiBondScore(_ context.Context, _ string
 type chatServiceTestStreamer struct {
 	lastRequest llm.ChatRequest
 	reply       string
+	callCount   int
 }
 
 func (s *chatServiceTestStreamer) StreamChat(_ context.Context, req llm.ChatRequest, onChunk func(text string) error) error {
+	s.callCount++
 	s.lastRequest = req
 	return onChunk(s.reply)
 }
@@ -189,6 +191,57 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 	}
 	if len(store.createdMemories) != 1 {
 		t.Fatalf("expected 1 archived memory, got %d", len(store.createdMemories))
+	}
+}
+
+func TestStreamReplyStartsSpecialDCONReplyThenGeneratesContinuation(t *testing.T) {
+	t.Parallel()
+
+	store := &chatServiceTestStore{
+		profile: &models.BonsaiProfile{
+			UserID:    "user-1",
+			BondScore: 50,
+		},
+		sensorData: &models.SensorData{
+			UserID:             "user-1",
+			DeviceID:           "sensor-1",
+			MoisturePercent:    45,
+			LightLux:           1000,
+			TemperatureCelsius: 24,
+			RecordedAt:         time.Date(2026, 5, 5, 9, 0, 0, 0, time.FixedZone("JST", 9*60*60)),
+			SensorStatus:       sensorStatusNormal,
+		},
+	}
+	streamer := &chatServiceTestStreamer{reply: " 緊張しているぶん、準備してきた根はちゃんと踏んばれるよ。"}
+	service := NewChatService(store, streamer, &chatServiceTestEmbedder{})
+
+	var streamed strings.Builder
+	err := service.StreamReply(context.Background(), StreamChatInput{
+		UserID: "user-1",
+		Text:   "DCON本戦緊張するよ",
+	}, func(text string) error {
+		streamed.WriteString(text)
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("StreamReply returned error: %v", err)
+	}
+
+	const want = "頑張って！君たちならうまくいくよ！ 緊張しているぶん、準備してきた根はちゃんと踏んばれるよ。"
+	if got := streamed.String(); got != want {
+		t.Fatalf("streamed reply = %q, want %q", got, want)
+	}
+	if streamer.callCount != 1 {
+		t.Fatalf("expected LLM streamer to be called once, got %d calls", streamer.callCount)
+	}
+	if !strings.Contains(streamer.lastRequest.SystemPrompt, "同じ文を繰り返さず") {
+		t.Fatalf("expected continuation guidance in prompt: %s", streamer.lastRequest.SystemPrompt)
+	}
+	if len(store.createdHistory) != 2 {
+		t.Fatalf("expected 2 history entries, got %d", len(store.createdHistory))
+	}
+	if got := store.createdHistory[1].Content; got != want {
+		t.Fatalf("assistant history = %q, want %q", got, want)
 	}
 }
 
