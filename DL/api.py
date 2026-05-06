@@ -18,9 +18,9 @@ SAM_WEIGHTS = Path(os.getenv("DL_SAM_WEIGHTS", str(APP_DIR / "mobile_sam.pt")))
 MAX_IMAGE_MB = int(os.getenv("DL_MAX_IMAGE_MB", "8"))
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ARTIFACT_NAMES = {
-    "yolo_detection": "output_1_yolo_detection.jpg",
-    "sam_segmentation": "output_2_advanced_sam_segmentation.jpg",
-    "color_extraction": "output_3_advanced_color_extraction.jpg",
+    "yolo_detection": "output_1_yolo_overlay_no_label_box.jpg",
+    "sam_segmentation": "output_2_sam_leaf_after_branch_pot_removed.jpg",
+    "color_extraction": "output_3_color_extraction.jpg",
 }
 
 app = FastAPI(title="Kotonoha DL Service")
@@ -97,4 +97,3 @@ def _suffix_for_content_type(content_type: str) -> str:
     if content_type == "image/webp":
         return ".webp"
     return ".jpg"
-

@@ -3,12 +3,20 @@ from __future__ import annotations
 import contextlib
 import io
 import os
-import re
 import shutil
 import threading
 from pathlib import Path
 
-from bonsAI import analyze_health_advanced
+_CACHE_DIR = Path(os.getenv("DL_CACHE_DIR", "/tmp/kotonoha-dl-cache"))
+_MPLCONFIG_DIR = _CACHE_DIR / "matplotlib"
+_XDG_CACHE_DIR = _CACHE_DIR / "xdg"
+_MPLCONFIG_DIR.mkdir(parents=True, exist_ok=True)
+_XDG_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+os.environ.setdefault("MPLBACKEND", "Agg")
+os.environ.setdefault("MPLCONFIGDIR", str(_MPLCONFIG_DIR))
+os.environ.setdefault("XDG_CACHE_HOME", str(_XDG_CACHE_DIR))
+
+from bonsAI import analyze_bonsai
 from schemas import ColorRatios, DiagnosisRatios, DiagnosisResult
 
 
@@ -41,25 +49,24 @@ def analyze_image(
         try:
             os.chdir(request_dir)
             with contextlib.redirect_stdout(stdout_buffer):
-                analyze_health_advanced(
+                output = analyze_bonsai(
                     image_path=str(input_path),
                     yolo_weights=str(yolo_weights.resolve()),
                     sam_weights=str(sam_weights.resolve()),
                 )
+        except (FileNotFoundError, RuntimeError) as error:
+            raise DiagnosisError(str(error)) from error
         finally:
             os.chdir(previous_cwd)
 
     raw_stdout = stdout_buffer.getvalue()
-    if "画像の読み込みに失敗しました" in raw_stdout:
-        raise DiagnosisError("画像の読み込みに失敗しました")
-    if "画像内に Foliage" in raw_stdout:
-        raise DiagnosisError("葉の領域を検出できませんでした")
-
-    health_score = _parse_health_score(raw_stdout)
-    if health_score is None:
+    if not isinstance(output, dict) or "総合健康度" not in output:
         raise DiagnosisError("診断結果を解析できませんでした")
 
-    status_label, severity_label, detail = _parse_status(raw_stdout)
+    health_score = float(output["総合健康度"])
+    status_label = str(output.get("状態判定") or "不明")
+    severity_label = _severity_label_for_status(status_label)
+    detail = str(output.get("詳細") or "診断の詳細を取得できませんでした。")
     status = _normalize_status(status_label)
     severity = _normalize_severity(severity_label)
     artifacts = _collect_artifacts(request_dir)
@@ -72,51 +79,39 @@ def analyze_image(
         severity=severity,
         severity_label=severity_label,
         detail=detail,
-        ratios=_parse_ratios(raw_stdout),
+        ratios=_parse_ratios(output),
         artifacts=artifacts,
         raw_stdout=raw_stdout,
     )
 
 
-def _parse_health_score(stdout: str) -> float | None:
-    match = re.search(r"【\s*総合健康度\s*】\s*([0-9]+(?:\.[0-9]+)?)\s*/\s*100", stdout)
-    if not match:
-        return None
-    return float(match.group(1))
-
-
-def _parse_ratios(stdout: str) -> DiagnosisRatios:
+def _parse_ratios(output: dict) -> DiagnosisRatios:
+    ratios = output.get("領域ごとの色割合") or {}
     return DiagnosisRatios(
-        total=_parse_ratio_line(stdout, "全体"),
-        top=_parse_ratio_line(stdout, "新芽"),
-        bottom=_parse_ratio_line(stdout, "古葉"),
+        total=_color_ratios(ratios.get("全体")),
+        top=_color_ratios(ratios.get("上部")),
+        bottom=_color_ratios(ratios.get("下部")),
     )
 
 
-def _parse_ratio_line(stdout: str, label: str) -> ColorRatios:
-    pattern = rf"\[\s*{re.escape(label)}\s*\]\s*緑:([0-9.]+)%\s*黄:([0-9.]+)%\s*茶:([0-9.]+)%"
-    match = re.search(pattern, stdout)
-    if not match:
+def _color_ratios(value: object) -> ColorRatios:
+    if not isinstance(value, dict):
         return ColorRatios()
     return ColorRatios(
-        green=float(match.group(1)),
-        yellow=float(match.group(2)),
-        brown_red=float(match.group(3)),
+        green=float(value.get("green", 0.0)),
+        yellow=float(value.get("yellow", 0.0)),
+        brown_red=float(value.get("brown_red", 0.0)),
     )
 
 
-def _parse_status(stdout: str) -> tuple[str, str, str]:
-    status = _parse_bracket_value(stdout, "状態判定") or "不明"
-    severity = _parse_bracket_value(stdout, "深刻度") or "不明"
-    detail = _parse_bracket_value(stdout, "詳細") or "診断の詳細を取得できませんでした。"
-    return status, severity, detail
-
-
-def _parse_bracket_value(stdout: str, label: str) -> str | None:
-    match = re.search(rf"【{re.escape(label)}】([^\n]+)", stdout)
-    if not match:
-        return None
-    return match.group(1).strip()
+def _severity_label_for_status(status_label: str) -> str:
+    if "健康" in status_label:
+        return "なし"
+    if "危険" in status_label or "枯死" in status_label or "強い警告" in status_label:
+        return "高"
+    if "注意" in status_label or "保留" in status_label:
+        return "中"
+    return "不明"
 
 
 def _normalize_status(label: str) -> str:
@@ -143,9 +138,9 @@ def _normalize_severity(label: str) -> str:
 
 def _collect_artifacts(request_dir: Path) -> dict[str, str]:
     mapping = {
-        "yolo_detection": "output_1_yolo_detection.jpg",
-        "sam_segmentation": "output_2_advanced_sam_segmentation.jpg",
-        "color_extraction": "output_3_advanced_color_extraction.jpg",
+        "yolo_detection": "output_1_yolo_overlay_no_label_box.jpg",
+        "sam_segmentation": "output_2_sam_leaf_after_branch_pot_removed.jpg",
+        "color_extraction": "output_3_color_extraction.jpg",
     }
 
     artifacts: dict[str, str] = {}
@@ -154,4 +149,3 @@ def _collect_artifacts(request_dir: Path) -> dict[str, str]:
         if path.exists():
             artifacts[key] = str(path)
     return artifacts
-
