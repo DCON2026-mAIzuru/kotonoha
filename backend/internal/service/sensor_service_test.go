@@ -369,6 +369,60 @@ func TestGetPresentationCurrentFluctuatesSensorsWithoutSensorEvent(t *testing.T)
 	}
 }
 
+func TestGetPresentationCurrentResetsOutOfRangeDemoValues(t *testing.T) {
+	store := &sensorServiceTestStore{
+		previous: &models.SensorData{
+			UserID:             "user-1",
+			DeviceID:           "sensor-1",
+			MoisturePercent:    53,
+			LightLux:           44460,
+			TemperatureCelsius: 97.6,
+			RecordedAt:         time.Now().UTC().Add(-30 * time.Second),
+			SensorStatus:       sensorStatusNormal,
+			RawPayload: map[string]any{
+				"air_humidity_percent":     86.2,
+				"pressure_pascal":          1195.6,
+				"soil_temperature_celsius": -47.6,
+				"soil_ec_us_cm":            4624.0,
+				"soil_ph_value":            13.7,
+			},
+		},
+	}
+	service := NewSensorService(store, nil, nil, nil)
+
+	result, err := service.GetPresentationCurrent(context.Background(), "user-1")
+	if err != nil {
+		t.Fatalf("GetPresentationCurrent returned error: %v", err)
+	}
+
+	if result.LightLux < presentationLightMin || result.LightLux > presentationLightMax {
+		t.Fatalf("light out of presentation range: %v", result.LightLux)
+	}
+	if result.TemperatureCelsius < presentationTemperatureMin || result.TemperatureCelsius > presentationTemperatureMax {
+		t.Fatalf("temperature out of presentation range: %v", result.TemperatureCelsius)
+	}
+
+	rangeChecks := map[string]struct {
+		min float64
+		max float64
+	}{
+		"air_humidity_percent":     {presentationAirHumidityMin, presentationAirHumidityMax},
+		"pressure_pascal":          {presentationPressureMin, presentationPressureMax},
+		"soil_temperature_celsius": {presentationSoilTemperatureMin, presentationSoilTemperatureMax},
+		"soil_ec_us_cm":            {presentationSoilECMin, presentationSoilECMax},
+		"soil_ph_value":            {presentationSoilPHMin, presentationSoilPHMax},
+	}
+	for key, allowed := range rangeChecks {
+		value, ok := result.RawPayload[key].(float64)
+		if !ok {
+			t.Fatalf("expected numeric raw payload for %q: %#v", key, result.RawPayload[key])
+		}
+		if value < allowed.min || value > allowed.max {
+			t.Fatalf("%s out of presentation range: %v", key, value)
+		}
+	}
+}
+
 func TestRunPresentationDemoTriggersLowMoistureNotification(t *testing.T) {
 	store := &sensorServiceTestStore{
 		previous: &models.SensorData{

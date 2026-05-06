@@ -32,6 +32,33 @@ const (
 	lowMoistureThreshold       = 20.0
 )
 
+const (
+	presentationMoistureDefault        = 48.0
+	presentationMoistureMin            = 5.0
+	presentationMoistureMax            = 90.0
+	presentationLightDefault           = 1800.0
+	presentationLightMin               = 300.0
+	presentationLightMax               = 4000.0
+	presentationTemperatureDefault     = 24.0
+	presentationTemperatureMin         = 12.0
+	presentationTemperatureMax         = 34.0
+	presentationAirHumidityDefault     = 56.0
+	presentationAirHumidityMin         = 30.0
+	presentationAirHumidityMax         = 80.0
+	presentationPressureDefault        = 1013.2
+	presentationPressureMin            = 970.0
+	presentationPressureMax            = 1045.0
+	presentationSoilTemperatureDefault = 23.4
+	presentationSoilTemperatureMin     = 12.0
+	presentationSoilTemperatureMax     = 32.0
+	presentationSoilECDefault          = 520.0
+	presentationSoilECMin              = 150.0
+	presentationSoilECMax              = 2000.0
+	presentationSoilPHDefault          = 6.6
+	presentationSoilPHMin              = 5.0
+	presentationSoilPHMax              = 8.0
+)
+
 var ErrSensorReadingOutOfOrder = errors.New("recorded_at が最新のセンサー時刻より古いため保存できません")
 
 type sensorStore interface {
@@ -183,7 +210,7 @@ func (s *SensorService) GetPresentationCurrent(ctx context.Context, userID strin
 	values.Temperature = nextFluctuatedTemperature(values.Temperature, now)
 	values.AirHumidity = nextFluctuatedAirHumidity(values.AirHumidity, now)
 	values.Pressure = nextFluctuatedPressure(values.Pressure, now)
-	values.SoilTemperature = nextFluctuatedTemperature(values.SoilTemperature, now.Add(time.Second))
+	values.SoilTemperature = nextFluctuatedSoilTemperature(values.SoilTemperature, now.Add(time.Second))
 	values.SoilEC = nextFluctuatedEC(values.SoilEC, now)
 	values.SoilPH = nextFluctuatedPH(values.SoilPH, now)
 
@@ -326,7 +353,7 @@ func (s *SensorService) RunPresentationDemo(ctx context.Context, userID string) 
 	values.Temperature = nextFluctuatedTemperature(values.Temperature, now)
 	values.AirHumidity = nextFluctuatedAirHumidity(values.AirHumidity, now)
 	values.Pressure = nextFluctuatedPressure(values.Pressure, now)
-	values.SoilTemperature = nextFluctuatedTemperature(values.SoilTemperature, now.Add(time.Second))
+	values.SoilTemperature = nextFluctuatedSoilTemperature(values.SoilTemperature, now.Add(time.Second))
 	values.SoilEC = nextFluctuatedEC(values.SoilEC, now)
 	values.SoilPH = nextFluctuatedPH(values.SoilPH, now)
 
@@ -801,7 +828,7 @@ func clampFloat(value float64, min float64, max float64) float64 {
 }
 
 func nextFluctuatedMoisture(current float64, now time.Time) float64 {
-	current = clampFloat(current, 0, 100)
+	current = normalizePresentationValue(current, presentationMoistureDefault, presentationMoistureMin, presentationMoistureMax)
 
 	delta := 7.0
 	if now.Unix()%2 == 0 {
@@ -814,32 +841,32 @@ func nextFluctuatedMoisture(current float64, now time.Time) float64 {
 		delta = -7.0
 	}
 
-	return math.Round(clampFloat(current+delta, 0, 100)*10) / 10
+	return math.Round(clampFloat(current+delta, presentationMoistureMin, presentationMoistureMax)*10) / 10
 }
 
 func presentationSensorValuesFromCurrent(current *models.SensorData) presentationSensorValues {
 	values := presentationSensorValues{
-		Moisture:        48.0,
-		Light:           1800.0,
-		Temperature:     24.0,
-		AirHumidity:     56.0,
-		Pressure:        1013.2,
-		SoilTemperature: 23.4,
-		SoilEC:          520.0,
-		SoilPH:          6.6,
+		Moisture:        presentationMoistureDefault,
+		Light:           presentationLightDefault,
+		Temperature:     presentationTemperatureDefault,
+		AirHumidity:     presentationAirHumidityDefault,
+		Pressure:        presentationPressureDefault,
+		SoilTemperature: presentationSoilTemperatureDefault,
+		SoilEC:          presentationSoilECDefault,
+		SoilPH:          presentationSoilPHDefault,
 	}
 	if current == nil {
 		return values
 	}
 
-	values.Moisture = current.MoisturePercent
-	values.Light = current.LightLux
-	values.Temperature = current.TemperatureCelsius
-	values.AirHumidity = rawPayloadFloat(current.RawPayload, "air_humidity_percent", values.AirHumidity)
-	values.Pressure = rawPayloadFloat(current.RawPayload, "pressure_pascal", values.Pressure)
-	values.SoilTemperature = rawPayloadFloat(current.RawPayload, "soil_temperature_celsius", values.SoilTemperature)
-	values.SoilEC = rawPayloadFloat(current.RawPayload, "soil_ec_us_cm", values.SoilEC)
-	values.SoilPH = rawPayloadFloat(current.RawPayload, "soil_ph_value", values.SoilPH)
+	values.Moisture = normalizePresentationValue(current.MoisturePercent, presentationMoistureDefault, presentationMoistureMin, presentationMoistureMax)
+	values.Light = normalizePresentationValue(current.LightLux, presentationLightDefault, presentationLightMin, presentationLightMax)
+	values.Temperature = normalizePresentationValue(current.TemperatureCelsius, presentationTemperatureDefault, presentationTemperatureMin, presentationTemperatureMax)
+	values.AirHumidity = normalizePresentationValue(rawPayloadFloat(current.RawPayload, "air_humidity_percent", values.AirHumidity), presentationAirHumidityDefault, presentationAirHumidityMin, presentationAirHumidityMax)
+	values.Pressure = normalizePresentationValue(rawPayloadFloat(current.RawPayload, "pressure_pascal", values.Pressure), presentationPressureDefault, presentationPressureMin, presentationPressureMax)
+	values.SoilTemperature = normalizePresentationValue(rawPayloadFloat(current.RawPayload, "soil_temperature_celsius", values.SoilTemperature), presentationSoilTemperatureDefault, presentationSoilTemperatureMin, presentationSoilTemperatureMax)
+	values.SoilEC = normalizePresentationValue(rawPayloadFloat(current.RawPayload, "soil_ec_us_cm", values.SoilEC), presentationSoilECDefault, presentationSoilECMin, presentationSoilECMax)
+	values.SoilPH = normalizePresentationValue(rawPayloadFloat(current.RawPayload, "soil_ph_value", values.SoilPH), presentationSoilPHDefault, presentationSoilPHMin, presentationSoilPHMax)
 	return values
 }
 
@@ -861,52 +888,74 @@ func presentationSensorInput(userID string, values presentationSensorValues, rec
 }
 
 func nextFluctuatedLight(current float64, now time.Time) float64 {
-	current = math.Max(current, 0)
+	current = normalizePresentationValue(current, presentationLightDefault, presentationLightMin, presentationLightMax)
 	delta := 180.0
 	if now.Unix()%2 == 0 {
 		delta = -180.0
 	}
-	return math.Round(math.Max(current+delta, 0)*10) / 10
+	return math.Round(clampFloat(current+delta, presentationLightMin, presentationLightMax)*10) / 10
 }
 
 func nextFluctuatedTemperature(current float64, now time.Time) float64 {
+	current = normalizePresentationValue(current, presentationTemperatureDefault, presentationTemperatureMin, presentationTemperatureMax)
 	delta := 0.4
 	if now.Unix()%2 == 0 {
 		delta = -0.4
 	}
-	return math.Round(clampFloat(current+delta, -50, 100)*10) / 10
+	return math.Round(clampFloat(current+delta, presentationTemperatureMin, presentationTemperatureMax)*10) / 10
+}
+
+func nextFluctuatedSoilTemperature(current float64, now time.Time) float64 {
+	current = normalizePresentationValue(current, presentationSoilTemperatureDefault, presentationSoilTemperatureMin, presentationSoilTemperatureMax)
+	delta := 0.3
+	if now.Unix()%2 == 0 {
+		delta = -0.3
+	}
+	return math.Round(clampFloat(current+delta, presentationSoilTemperatureMin, presentationSoilTemperatureMax)*10) / 10
 }
 
 func nextFluctuatedAirHumidity(current float64, now time.Time) float64 {
+	current = normalizePresentationValue(current, presentationAirHumidityDefault, presentationAirHumidityMin, presentationAirHumidityMax)
 	delta := 2.3
 	if now.Unix()%2 == 0 {
 		delta = -2.3
 	}
-	return math.Round(clampFloat(current+delta, 0, 100)*10) / 10
+	return math.Round(clampFloat(current+delta, presentationAirHumidityMin, presentationAirHumidityMax)*10) / 10
 }
 
 func nextFluctuatedPressure(current float64, now time.Time) float64 {
+	current = normalizePresentationValue(current, presentationPressureDefault, presentationPressureMin, presentationPressureMax)
 	delta := 0.8
 	if now.Unix()%2 == 0 {
 		delta = -0.8
 	}
-	return math.Round(math.Max(current+delta, 0)*10) / 10
+	return math.Round(clampFloat(current+delta, presentationPressureMin, presentationPressureMax)*10) / 10
 }
 
 func nextFluctuatedEC(current float64, now time.Time) float64 {
+	current = normalizePresentationValue(current, presentationSoilECDefault, presentationSoilECMin, presentationSoilECMax)
 	delta := 18.0
 	if now.Unix()%2 == 0 {
 		delta = -18.0
 	}
-	return math.Round(math.Max(current+delta, 0)*10) / 10
+	return math.Round(clampFloat(current+delta, presentationSoilECMin, presentationSoilECMax)*10) / 10
 }
 
 func nextFluctuatedPH(current float64, now time.Time) float64 {
+	current = normalizePresentationValue(current, presentationSoilPHDefault, presentationSoilPHMin, presentationSoilPHMax)
 	delta := 0.05
 	if now.Unix()%2 == 0 {
 		delta = -0.05
 	}
-	return math.Round(clampFloat(current+delta, 0, 14)*100) / 100
+	return math.Round(clampFloat(current+delta, presentationSoilPHMin, presentationSoilPHMax)*100) / 100
+}
+
+func normalizePresentationValue(value float64, fallback float64, min float64, max float64) float64 {
+	if math.IsNaN(value) || math.IsInf(value, 0) || value < min || value > max {
+		return fallback
+	}
+
+	return value
 }
 
 func rawPayloadFloat(payload map[string]any, key string, fallback float64) float64 {
