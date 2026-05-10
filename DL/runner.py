@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import re
 import shutil
 import threading
 from pathlib import Path
@@ -16,8 +17,8 @@ os.environ.setdefault("MPLBACKEND", "Agg")
 os.environ.setdefault("MPLCONFIGDIR", str(_MPLCONFIG_DIR))
 os.environ.setdefault("XDG_CACHE_HOME", str(_XDG_CACHE_DIR))
 
-from bonsAI import analyze_bonsai
-from schemas import ColorRatios, DiagnosisRatios, DiagnosisResult
+from bonsAI import run_bonsai_diagnosis
+from schemas import DiagnosisRatios, DiagnosisResult
 
 
 _ANALYZE_LOCK = threading.Lock()
@@ -33,7 +34,6 @@ def analyze_image(
     image_path: Path,
     work_dir: Path,
     yolo_weights: Path,
-    sam_weights: Path,
 ) -> DiagnosisResult:
     request_dir = work_dir / request_id
     request_dir.mkdir(parents=True, exist_ok=True)
@@ -49,24 +49,19 @@ def analyze_image(
         try:
             os.chdir(request_dir)
             with contextlib.redirect_stdout(stdout_buffer):
-                output = analyze_bonsai(
+                run_bonsai_diagnosis(
                     image_path=str(input_path),
-                    yolo_weights=str(yolo_weights.resolve()),
-                    sam_weights=str(sam_weights.resolve()),
+                    yolo_weight=str(yolo_weights.resolve()),
                 )
-        except (FileNotFoundError, RuntimeError) as error:
+        except Exception as error:
             raise DiagnosisError(str(error)) from error
         finally:
             os.chdir(previous_cwd)
 
     raw_stdout = stdout_buffer.getvalue()
-    if not isinstance(output, dict) or "総合健康度" not in output:
-        raise DiagnosisError("診断結果を解析できませんでした")
-
-    health_score = float(output["総合健康度"])
-    status_label = str(output.get("状態判定") or "不明")
+    health_score, status_label = _parse_stdout(raw_stdout)
     severity_label = _severity_label_for_status(status_label)
-    detail = str(output.get("詳細") or "診断の詳細を取得できませんでした。")
+    detail = _detail_for_status(status_label, health_score)
     status = _normalize_status(status_label)
     severity = _normalize_severity(severity_label)
     artifacts = _collect_artifacts(request_dir)
@@ -79,32 +74,35 @@ def analyze_image(
         severity=severity,
         severity_label=severity_label,
         detail=detail,
-        ratios=_parse_ratios(output),
+        ratios=DiagnosisRatios(),
         artifacts=artifacts,
         raw_stdout=raw_stdout,
     )
 
 
-def _parse_ratios(output: dict) -> DiagnosisRatios:
-    ratios = output.get("領域ごとの色割合") or {}
-    return DiagnosisRatios(
-        total=_color_ratios(ratios.get("全体")),
-        top=_color_ratios(ratios.get("上部")),
-        bottom=_color_ratios(ratios.get("下部")),
-    )
+def _parse_stdout(raw_stdout: str) -> tuple[float, str]:
+    score_match = re.search(r"総合健康度\s*s\s*:\s*([0-9]+(?:\.[0-9]+)?)", raw_stdout)
+    status_match = re.search(r"状態\s*:\s*(.+)", raw_stdout)
+
+    if not score_match:
+        message = raw_stdout.strip() or "診断結果を解析できませんでした"
+        raise DiagnosisError(message)
+
+    status_label = status_match.group(1).strip() if status_match else "不明"
+    return float(score_match.group(1)), status_label
 
 
-def _color_ratios(value: object) -> ColorRatios:
-    if not isinstance(value, dict):
-        return ColorRatios()
-    return ColorRatios(
-        green=float(value.get("green", 0.0)),
-        yellow=float(value.get("yellow", 0.0)),
-        brown_red=float(value.get("brown_red", 0.0)),
-    )
+def _detail_for_status(status_label: str, health_score: float) -> str:
+    if "不健康" in status_label:
+        return f"葉色ヒートマップから、健康度は {health_score:.1f}/100 と判定されました。光・水・根の状態を確認してください。"
+    if "健康" in status_label:
+        return f"葉色ヒートマップから、健康度は {health_score:.1f}/100 と判定されました。葉色はおおむね安定しています。"
+    return f"葉色ヒートマップから、健康度は {health_score:.1f}/100 と判定されました。"
 
 
 def _severity_label_for_status(status_label: str) -> str:
+    if "不健康" in status_label:
+        return "高"
     if "健康" in status_label:
         return "なし"
     if "危険" in status_label or "枯死" in status_label or "強い警告" in status_label:
@@ -115,6 +113,8 @@ def _severity_label_for_status(status_label: str) -> str:
 
 
 def _normalize_status(label: str) -> str:
+    if "不健康" in label:
+        return "warning"
     if "健康" in label:
         return "healthy"
     if "やや注意" in label:
@@ -138,9 +138,7 @@ def _normalize_severity(label: str) -> str:
 
 def _collect_artifacts(request_dir: Path) -> dict[str, str]:
     mapping = {
-        "yolo_detection": "output_1_yolo_overlay_no_label_box.jpg",
-        "sam_segmentation": "output_2_sam_leaf_after_branch_pot_removed.jpg",
-        "color_extraction": "output_3_color_extraction.jpg",
+        "heatmap": "output_heatmap.jpg",
     }
 
     artifacts: dict[str, str] = {}

@@ -100,7 +100,7 @@ export interface BonsaiDiagnosis {
     top: DiagnosisColorRatios;
     bottom: DiagnosisColorRatios;
   };
-  artifact_urls?: Partial<Record<'yolo_detection' | 'sam_segmentation' | 'color_extraction', string>>;
+  artifact_urls?: Partial<Record<'heatmap' | 'yolo_detection' | 'sam_segmentation' | 'color_extraction', string>>;
   created_at: string;
 }
 

@@ -204,7 +204,7 @@ func allowedDiagnosisContentType(contentType string) bool {
 
 func allowedArtifactKind(kind string) bool {
 	switch kind {
-	case "yolo_detection", "sam_segmentation", "color_extraction":
+	case "heatmap", "yolo_detection", "sam_segmentation", "color_extraction":
 		return true
 	default:
 		return false
