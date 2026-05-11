@@ -176,6 +176,8 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 		"## なじみ具合",
 		"bond_score: 92",
 		"ぼんす語尾",
+		"## 返答の優先順位",
+		"センサー値、画像診断、会話履歴がずれる時",
 		"根元は少し静かです。",
 		"お水をもらえて助かりました。",
 		"先週は日当たりのよい窓辺に移してくれた",
@@ -242,6 +244,28 @@ func TestStreamReplyStartsSpecialDCONReplyThenGeneratesContinuation(t *testing.T
 	}
 	if got := store.createdHistory[1].Content; got != want {
 		t.Fatalf("assistant history = %q, want %q", got, want)
+	}
+}
+
+func TestBuildResponsePriorityPromptSectionWarnsOnUnhealthyDiagnosis(t *testing.T) {
+	t.Parallel()
+
+	prompt := buildResponsePriorityPromptSection(&models.BonsaiDiagnosis{
+		HealthScore:   41.2,
+		Status:        "warning",
+		StatusLabel:   "不健康",
+		Severity:      "high",
+		SeverityLabel: "高",
+	})
+
+	for _, want := range []string{
+		"「大丈夫」「安心している」「落ち着いている」だけで終えない",
+		"根元の水分は足りているけれど、葉色はまだ弱って見える",
+		"光・水・根の状態を見直す",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("prompt does not contain %q\nprompt=%s", want, prompt)
+		}
 	}
 }
 

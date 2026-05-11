@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import shutil
 import tempfile
 from pathlib import Path
 
@@ -14,13 +13,10 @@ from runner import DiagnosisError, analyze_image
 APP_DIR = Path(__file__).resolve().parent
 WORK_DIR = Path(os.getenv("DL_WORK_DIR", "/tmp/kotonoha-dl"))
 YOLO_WEIGHTS = Path(os.getenv("DL_YOLO_WEIGHTS", str(APP_DIR / "best.pt")))
-SAM_WEIGHTS = Path(os.getenv("DL_SAM_WEIGHTS", str(APP_DIR / "mobile_sam.pt")))
 MAX_IMAGE_MB = int(os.getenv("DL_MAX_IMAGE_MB", "8"))
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 ARTIFACT_NAMES = {
-    "yolo_detection": "output_1_yolo_overlay_no_label_box.jpg",
-    "sam_segmentation": "output_2_sam_leaf_after_branch_pot_removed.jpg",
-    "color_extraction": "output_3_color_extraction.jpg",
+    "heatmap": "output_heatmap.jpg",
 }
 
 app = FastAPI(title="Kotonoha DL Service")
@@ -40,8 +36,6 @@ def diagnose(
         raise HTTPException(status_code=400, detail="jpg/png/webp 画像を指定してください")
     if not YOLO_WEIGHTS.exists():
         raise HTTPException(status_code=500, detail=f"YOLO重みが見つかりません: {YOLO_WEIGHTS}")
-    if not SAM_WEIGHTS.exists():
-        raise HTTPException(status_code=500, detail=f"SAM重みが見つかりません: {SAM_WEIGHTS}")
 
     WORK_DIR.mkdir(parents=True, exist_ok=True)
     suffix = _suffix_for_content_type(image.content_type)
@@ -68,7 +62,6 @@ def diagnose(
             image_path=tmp_path,
             work_dir=WORK_DIR,
             yolo_weights=YOLO_WEIGHTS,
-            sam_weights=SAM_WEIGHTS,
         )
     except DiagnosisError as error:
         raise HTTPException(status_code=422, detail=str(error)) from error

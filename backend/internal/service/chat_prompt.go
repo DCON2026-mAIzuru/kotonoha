@@ -27,6 +27,22 @@ func buildImageDiagnosisPromptSection(diagnosis *models.BonsaiDiagnosis) string 
 	total := diagnosis.Ratios.Total
 	top := diagnosis.Ratios.Top
 	bottom := diagnosis.Ratios.Bottom
+	ratioSection := "  leaf_color_detail: not_provided_by_current_model"
+	if diagnosisRatiosAvailable(diagnosis.Ratios) {
+		ratioSection = fmt.Sprintf(`  leaf_color_total: green %.1f%%, yellow %.1f%%, brown %.1f%%
+  leaf_color_top: green %.1f%%, yellow %.1f%%, brown %.1f%%
+  leaf_color_bottom: green %.1f%%, yellow %.1f%%, brown %.1f%%`,
+			total.Green,
+			total.Yellow,
+			total.BrownRed,
+			top.Green,
+			top.Yellow,
+			top.BrownRed,
+			bottom.Green,
+			bottom.Yellow,
+			bottom.BrownRed,
+		)
+	}
 
 	var guidance string
 	switch diagnosis.Severity {
@@ -46,9 +62,7 @@ func buildImageDiagnosisPromptSection(diagnosis *models.BonsaiDiagnosis) string 
   status: %s
   severity: %s
   detail: %s
-  leaf_color_total: green %.1f%%, yellow %.1f%%, brown %.1f%%
-  leaf_color_top: green %.1f%%, yellow %.1f%%, brown %.1f%%
-  leaf_color_bottom: green %.1f%%, yellow %.1f%%, brown %.1f%%
+%s
 response_guidance: %s
 
 画像診断は「写真から見える葉色の手がかり」として使う。土の水分・光・温度のセンサー値と矛盾する場合は、どちらか一方を断定せず「写真ではこう見える、今の土はこう感じる」と分けて話す。`,
@@ -57,17 +71,47 @@ response_guidance: %s
 		strings.TrimSpace(diagnosis.StatusLabel),
 		strings.TrimSpace(diagnosis.SeverityLabel),
 		truncateRunes(strings.TrimSpace(diagnosis.Detail), 240),
-		total.Green,
-		total.Yellow,
-		total.BrownRed,
-		top.Green,
-		top.Yellow,
-		top.BrownRed,
-		bottom.Green,
-		bottom.Yellow,
-		bottom.BrownRed,
+		ratioSection,
 		guidance,
 	)
+}
+
+func diagnosisRatiosAvailable(ratios models.DiagnosisRatios) bool {
+	values := []models.DiagnosisColorRatios{ratios.Total, ratios.Top, ratios.Bottom}
+	for _, value := range values {
+		if value.Green > 0 || value.Yellow > 0 || value.BrownRed > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func buildResponsePriorityPromptSection(diagnosis *models.BonsaiDiagnosis) string {
+	if imageDiagnosisNeedsAttention(diagnosis) {
+		return `画像診断で葉色に強い不調が出ている時は、土壌水分が十分でも「大丈夫」「安心している」「落ち着いている」だけで終えない。
+返答では、まず写真では葉色が弱って見えることを短く認める。
+センサー値と画像診断がずれる時は「根元の水分は足りているけれど、葉色はまだ弱って見える」のように分けて話す。
+病気や枯死は断定せず、光・水・根の状態を見直す小さな行動を1つだけ添える。`
+	}
+
+	return "センサー値、画像診断、会話履歴がずれる時は一方だけを断定せず、見えている範囲を分けて短く話す。"
+}
+
+func imageDiagnosisNeedsAttention(diagnosis *models.BonsaiDiagnosis) bool {
+	if diagnosis == nil {
+		return false
+	}
+	status := strings.TrimSpace(diagnosis.Status)
+	statusLabel := strings.TrimSpace(diagnosis.StatusLabel)
+	severity := strings.TrimSpace(diagnosis.Severity)
+	severityLabel := strings.TrimSpace(diagnosis.SeverityLabel)
+
+	return severity == "high" ||
+		severityLabel == "高" ||
+		strings.Contains(status, "critical") ||
+		strings.Contains(statusLabel, "不健康") ||
+		strings.Contains(statusLabel, "危険") ||
+		strings.Contains(statusLabel, "枯死")
 }
 
 func buildGrowthStatePromptSection(profile *models.BonsaiProfile, sensorData *models.SensorData) string {

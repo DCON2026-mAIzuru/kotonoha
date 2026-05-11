@@ -322,6 +322,8 @@ func (s *ChatService) buildChatSystemPrompt(
 	builder.WriteString(formatRecentHistoryPromptSection(recentHistory))
 	builder.WriteString("\n\n---\n\n## 今日の話し方\n\n")
 	builder.WriteString(buildToneModePromptSection(profile))
+	builder.WriteString("\n\n---\n\n## 返答の優先順位\n\n")
+	builder.WriteString(buildResponsePriorityPromptSection(diagnosis))
 
 	return builder.String()
 }

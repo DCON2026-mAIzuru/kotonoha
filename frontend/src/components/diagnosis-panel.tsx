@@ -9,7 +9,7 @@ interface DiagnosisPanelProps {
   onClose?: () => void;
 }
 
-const ARTIFACT_ORDER = ['color_extraction', 'sam_segmentation', 'yolo_detection'] as const;
+const ARTIFACT_ORDER = ['heatmap', 'color_extraction', 'sam_segmentation', 'yolo_detection'] as const;
 
 export function DiagnosisPanel({ token, onClose }: DiagnosisPanelProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -195,11 +195,13 @@ export function DiagnosisPanel({ token, onClose }: DiagnosisPanelProps) {
             {diagnosis.detail}
           </p>
 
-          <div style={{ display: 'grid', gap: 8 }}>
-            <RatioRow label="全体" ratios={diagnosis.ratios.total} />
-            <RatioRow label="新芽" ratios={diagnosis.ratios.top} />
-            <RatioRow label="古葉" ratios={diagnosis.ratios.bottom} />
-          </div>
+          {hasDiagnosisRatios(diagnosis.ratios) && (
+            <div style={{ display: 'grid', gap: 8 }}>
+              <RatioRow label="全体" ratios={diagnosis.ratios.total} />
+              <RatioRow label="新芽" ratios={diagnosis.ratios.top} />
+              <RatioRow label="古葉" ratios={diagnosis.ratios.bottom} />
+            </div>
+          )}
 
           {ARTIFACT_ORDER.some((kind) => artifactUrls[kind]) && (
             <div style={{ display: 'grid', gap: 10 }}>
@@ -239,8 +241,15 @@ function RatioRow({ label, ratios }: { label: string; ratios: DiagnosisColorRati
   );
 }
 
+function hasDiagnosisRatios(ratios: BonsaiDiagnosis['ratios']): boolean {
+  const values = [ratios.total, ratios.top, ratios.bottom];
+  return values.some((ratio) => ratio.green > 0 || ratio.yellow > 0 || ratio.brown_red > 0);
+}
+
 function artifactLabel(kind: string): string {
   switch (kind) {
+    case 'heatmap':
+      return '葉色ヒートマップ';
     case 'color_extraction':
       return '葉色抽出';
     case 'sam_segmentation':
