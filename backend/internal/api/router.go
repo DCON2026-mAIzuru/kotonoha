@@ -4,6 +4,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/apple/kotonoha/backend/internal/api/apidocs"
 	"github.com/apple/kotonoha/backend/internal/api/handlers"
 	"github.com/apple/kotonoha/backend/internal/api/middleware"
 	"github.com/apple/kotonoha/backend/internal/realtime"
@@ -53,6 +54,8 @@ func NewRouter(deps Dependencies) *gin.Engine {
 	diagnosisHandler := handlers.NewDiagnosisHandler(deps.DiagnosisService, parsePositiveInt64(deps.Config.DiagnosisMaxImageMB, 8))
 	ttsHandler := handlers.NewTTSHandler(deps.VoicevoxService)
 	authMiddleware := middleware.RequireAuth(deps.JWTVerifier)
+
+	apidocs.Register(engine)
 
 	engine.GET("/healthz", healthHandler.Liveness)
 	engine.GET("/readyz", healthHandler.Readiness)
