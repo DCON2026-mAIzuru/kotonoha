@@ -21,4 +21,4 @@ For a fully local setup, `YOUR_PC_LAN_IP` is the Mac/PC address on the same Wi-F
 
 ## Related doc
 
-- [docs/setup/step10-esp-mock.md](/Users/apple/Documents/teamproject/kotonoha/docs/setup/step10-esp-mock.md:1)
+- [docs/setup/step10-esp-mock.md](../docs/setup/step10-esp-mock.md)

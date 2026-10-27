@@ -54,7 +54,7 @@ POST /api/v1/sensor
 
 この手順用のスケッチ:
 
-- [esp_mock_sensor.ino](/Users/apple/Documents/teamproject/kotonoha/esp/esp_mock_sensor.ino:1)
+- [esp_mock_sensor.ino](../../esp/esp_mock_sensor/esp_mock_sensor.ino)
 
 ## 事前に埋める値
 
@@ -93,7 +93,7 @@ http://192.168.1.20:8080/api/v1/sensor
 
 ## 書き込み手順
 
-1. Arduino IDE で [esp_mock_sensor.ino](/Users/apple/Documents/teamproject/kotonoha/esp/esp_mock_sensor.ino:1) を開く
+1. Arduino IDE で [esp_mock_sensor.ino](../../esp/esp_mock_sensor/esp_mock_sensor.ino) を開く
 2. Wi-Fi / API 設定を埋める
 3. ESP32 を USB 接続する
 4. ボードとポートを選択する

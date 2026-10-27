@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc *)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(echo \"PID: $!\")",
+      "Bash(ls /Users/apple/ghq/github.com/DCON2026-mAIzuru/kotonoha/frontend/.env*)",
+      "Bash(curl -s http://localhost:8080/api/v1/auth/me)",
+      "Bash(curl -sv --include http://localhost:8080/api/v1/health)",
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(d.get\\('candidates',[{}]\\)[0].get\\('content',{}\\).get\\('parts',[{}]\\)[0].get\\('text','NO TEXT'\\)[:100]\\)\")",
+      "Bash(cat /Users/apple/ghq/github.com/DCON2026-mAIzuru/kotonoha/backend/internal/api/middleware/*.go)",
+      "Bash(ps -p 14508 -o etime,command)",
+      "Bash(curl -sv -N -H 'Connection: Upgrade' -H 'Upgrade: websocket' -H 'Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==' -H 'Sec-WebSocket-Version: 13' -H 'Origin: http://localhost:3000' 'http://localhost:8080/ws/chat?token=invalid')",
+      "Bash(psql postgresql://postgres.xlwsuugtwmynshzarwbq:Kotonoha_1945@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres -c '\\\\dt public.*')",
+      "Bash(curl -s \"https://xlwsuugtwmynshzarwbq.supabase.co/rest/v1/?apikey=sb_publishable_LODMT-aMVXGgDw-zBMqkIg_TrLSUNvm\")",
+      "Bash(go build *)"
+    ]
+  }
+}
