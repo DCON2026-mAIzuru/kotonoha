@@ -1,11 +1,13 @@
 # システム構成図
 
 `Kotonoha` の主要コンポーネントとデータの流れをまとめた構成図です。  
-DCON のポスターや口頭説明では、まずこの図をベースに `センサー入力 -> 文脈生成 -> 応答/通知` の流れを説明すると通しやすいです。
+現行の構成は以下の Mermaid 図を参照してください。
 
 ## 画像版
 
 ![Kotonoha システム構成図](./system-architecture-diagram.svg)
+
+画像版は以前の発表用資料で、画像診断・音声合成を含みません。
 
 ## 全体構成
 
@@ -33,6 +35,8 @@ flowchart LR
 
     llm[Gemini API<br/>応答生成 / 埋め込み]
     pushsvc[Push Service]
+    dl[画像診断サービス<br/>FastAPI]
+    voice[VOICEVOX Engine]
 
     user -->|操作・会話| browser
     browser -->|ログイン| auth
@@ -45,6 +49,8 @@ flowchart LR
 
     api --> chat
     api --> sensor
+    api -->|画像診断| dl
+    api -->|音声合成| voice
     ws --> chat
 
     chat -->|プロフィール取得| db
