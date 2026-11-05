@@ -176,8 +176,10 @@ func (s *ChatService) StreamReply(ctx context.Context, input StreamChatInput, on
 		return err
 	}
 
-	if err := s.archiveConversationTurn(ctx, input, replyText, userEntry.ID, assistantEntry.ID); err != nil {
-		log.Printf("会話ターンの長期記憶化に失敗しました: user_id=%s err=%v", input.UserID, err)
+	if s.embedder != nil {
+		if err := s.archiveConversationTurn(ctx, input, replyText, userEntry.ID, assistantEntry.ID); err != nil {
+			log.Printf("会話ターンの長期記憶化に失敗しました: user_id=%s err=%v", input.UserID, err)
+		}
 	}
 
 	if profile != nil {

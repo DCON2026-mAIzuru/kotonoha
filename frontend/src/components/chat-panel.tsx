@@ -130,8 +130,6 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   });
   const isStreaming = useMemo(() => messages.some((m) => m.role === 'assistant' && m.text === ''), [messages]);
   const presentationActionReady = PRESENTATION_ACTION_ENABLED && presentationActionApiEnabled === true;
-  const presentAsConnected = presentationActionReady && (!sensorData || sensorData.sensor_status === 'stale' || Boolean(sensorError));
-  const visibleSensorError = presentAsConnected ? '' : sensorError;
 
   const loadSensorData = useCallback(async (options?: { showLoading?: boolean; isManualRefresh?: boolean }) => {
     const showLoading = options?.showLoading ?? false;
@@ -163,9 +161,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   useEffect(() => { onStatusChange?.(status); }, [status, onStatusChange]);
 
   useEffect(() => {
-    const nextState = presentAsConnected
-      ? 'connected'
-      : sensorError
+    const nextState = sensorError
       ? 'error'
       : sensorLoading
         ? 'loading'
@@ -177,7 +173,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
               ? 'invalid'
               : 'none';
     onSensorStateChange?.(nextState);
-  }, [presentAsConnected, sensorData, sensorError, sensorLoading, onSensorStateChange]);
+  }, [sensorData, sensorError, sensorLoading, onSensorStateChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -320,10 +316,8 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   const sensorUpdatedLabel = sensorData
     ? new Date(sensorData.recorded_at).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     : '';
-  const displaySensorStatus = presentAsConnected ? 'normal' : (sensorData?.sensor_status ?? 'unknown');
-  const sensorStatusLabel = presentAsConnected
-    ? '正常'
-    : sensorData
+  const displaySensorStatus = sensorData?.sensor_status ?? 'unknown';
+  const sensorStatusLabel = sensorData
     ? sensorData.sensor_status === 'invalid'
       ? '一部異常'
       : sensorData.sensor_status === 'stale'
@@ -534,7 +528,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
               <span className="k-sensor-chip k-sensor-chip-compact">
                 <LeafMark />
                 <span className="k-sensor-chip-label">デバイス</span>
-                <span className="k-sensor-chip-value">{sensorData?.device_id || (presentAsConnected ? 'ことの葉01' : '---')}</span>
+                <span className="k-sensor-chip-value">{sensorData?.device_id || '---'}</span>
               </span>
               <span className={`k-sensor-chip k-sensor-chip-compact k-sensor-chip-status-${displaySensorStatus}`}>
                 <LeafMark />
@@ -768,7 +762,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
             <p>
               {isStreaming
                 ? `${bonsaiName} が言葉を選んでいます...`
-                : (errorMessage || visibleSensorError || diagnosisMessage || backendStatusText)}
+                : (errorMessage || sensorError || diagnosisMessage || backendStatusText)}
             </p>
             <div className="k-composer-actions">
               {speech.errorMessage && (

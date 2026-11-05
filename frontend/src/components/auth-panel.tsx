@@ -7,6 +7,8 @@ interface AuthPanelProps {
   onSignIn: (email: string, password: string) => Promise<void>;
   onSignUp: (email: string, password: string) => Promise<void>;
   onGoogleSignIn: () => Promise<void>;
+  allowSignUp?: boolean;
+  googleEnabled?: boolean;
 }
 
 function GoogleIcon() {
@@ -20,7 +22,13 @@ function GoogleIcon() {
   );
 }
 
-export function AuthPanel({ onSignIn, onSignUp, onGoogleSignIn }: AuthPanelProps) {
+export function AuthPanel({
+  onSignIn,
+  onSignUp,
+  onGoogleSignIn,
+  allowSignUp = true,
+  googleEnabled = true,
+}: AuthPanelProps) {
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -112,13 +120,15 @@ export function AuthPanel({ onSignIn, onSignUp, onGoogleSignIn }: AuthPanelProps
           >
             ログイン
           </button>
-          <button
-            type="button"
-            className={`k-auth-tab${mode === 'register' ? ' k-auth-tab-active' : ''}`}
-            onClick={() => switchMode('register')}
-          >
-            新規登録
-          </button>
+          {allowSignUp && (
+            <button
+              type="button"
+              className={`k-auth-tab${mode === 'register' ? ' k-auth-tab-active' : ''}`}
+              onClick={() => switchMode('register')}
+            >
+              新規登録
+            </button>
+          )}
         </div>
 
         {/* ── 成功画面 ── */}
@@ -227,23 +237,27 @@ export function AuthPanel({ onSignIn, onSignUp, onGoogleSignIn }: AuthPanelProps
               </button>
             </form>
 
-            {/* ── 区切り ── */}
-            <div className="k-auth-divider">
-              <div className="k-auth-divider-line" />
-              <span>または</span>
-              <div className="k-auth-divider-line" />
-            </div>
+            {googleEnabled && (
+              <>
+                {/* ── 区切り ── */}
+                <div className="k-auth-divider">
+                  <div className="k-auth-divider-line" />
+                  <span>または</span>
+                  <div className="k-auth-divider-line" />
+                </div>
 
-            {/* ── Google ── */}
-            <button
-              type="button"
-              disabled={loading}
-              className="k-btn-google"
-              onClick={() => void handleGoogleSignIn()}
-            >
-              <GoogleIcon />
-              Google でログイン
-            </button>
+                {/* ── Google ── */}
+                <button
+                  type="button"
+                  disabled={loading}
+                  className="k-btn-google"
+                  onClick={() => void handleGoogleSignIn()}
+                >
+                  <GoogleIcon />
+                  Google でログイン
+                </button>
+              </>
+            )}
           </>
         )}
       </div>

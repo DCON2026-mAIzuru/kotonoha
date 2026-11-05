@@ -30,7 +30,8 @@ cp frontend/.env.example frontend/.env.local
 
 | 機能 | 設定 |
 | --- | --- |
-| Gemini | `GEMINI_API_KEY`、必要に応じて `GEMINI_MODEL`、`GEMINI_MODEL_PRIORITY`、`GEMINI_EMBEDDING_MODEL`。API キーが空の場合は代替の応答・埋め込みを使用します。 |
+| 会話生成 | `LLM_PROVIDER=gemini` と `GEMINI_API_KEY`、または `LLM_PROVIDER=openai-compatible` と `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY`。`disabled` は未接続エラーを返します。 |
+| ベクトル記憶 | `EMBEDDING_PROVIDER=gemini` と `GEMINI_API_KEY`、`GEMINI_EMBEDDING_MODEL`。`disabled` では通常の会話履歴だけを保存します。 |
 | センサー送信 | backend に `SENSOR_SHARED_TOKEN` を設定し、送信側にも同じ値を設定します。 |
 | Web Push | backend に `VAPID_PUBLIC_KEY`、`VAPID_PRIVATE_KEY`、`VAPID_SUBJECT`、frontend に `NEXT_PUBLIC_VAPID_PUBLIC_KEY` を設定します。公開鍵は同じものを使います。 |
 | 画像診断 | `DL_SERVICE_URL`（既定 `http://127.0.0.1:8090`）、`DL_SERVICE_TIMEOUT_SECONDS`、`DIAGNOSIS_MAX_IMAGE_MB`、`DIAGNOSIS_ARTIFACT_DIR` を必要に応じて設定します。 |
@@ -92,6 +93,8 @@ npm run build
 ```
 
 ## デプロイ
+
+MacでWeb/APIを動かし、ColabをLLM専用に使う場合は [MacとColabの運用手順](mac-colab-deployment.md) を参照してください。
 
 - Backend は `backend/Dockerfile` と `backend/fly.toml` を使って Fly.io へデプロイできます。必要な環境変数は secrets に設定してください。
 - Frontend は `frontend/` を Vercel のプロジェクトとして接続し、必要な `NEXT_PUBLIC_*` 変数を設定します。backend の `BACKEND_ALLOWED_ORIGIN` も本番フロントエンドに合わせてください。

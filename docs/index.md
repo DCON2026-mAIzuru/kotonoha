@@ -4,6 +4,7 @@
 
 - [システム構成](Architecture/kotonoha-system.md)
 - [ローカル開発・運用](setup/local-development.md)
+- [MacでWebを動かしColabのLLMへ接続](setup/mac-colab-deployment.md)
 - [API と WebSocket](api.md)
 - [画像診断サービス](setup/image-diagnosis.md)
 - [センサー送信](setup/sensors.md)

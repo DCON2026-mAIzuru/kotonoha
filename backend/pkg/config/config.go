@@ -8,6 +8,7 @@ import (
 )
 
 type Config struct {
+	BackendHost            string
 	BackendPort            string
 	BackendAllowedOrigin   string
 	SupabaseURL            string
@@ -21,6 +22,13 @@ type Config struct {
 	GeminiModel            string
 	GeminiModelPriority    string
 	GeminiEmbeddingModel   string
+	LLMProvider            string
+	LLMBaseURL             string
+	LLMAPIKey              string
+	LLMModel               string
+	LLMMaxTokens           string
+	LLMTimeout             string
+	EmbeddingProvider      string
 	VapidPublicKey         string
 	VapidPrivateKey        string
 	VapidSubject           string
@@ -40,6 +48,7 @@ func Load() (*Config, error) {
 	_ = godotenv.Load()
 
 	cfg := &Config{
+		BackendHost:            os.Getenv("BACKEND_HOST"),
 		BackendPort:            getEnv("BACKEND_PORT", "8080"),
 		BackendAllowedOrigin:   getEnv("BACKEND_ALLOWED_ORIGIN", "http://localhost:3000"),
 		SupabaseURL:            os.Getenv("SUPABASE_URL"),
@@ -53,6 +62,13 @@ func Load() (*Config, error) {
 		GeminiModel:            getEnv("GEMINI_MODEL", "gemini-2.5-flash"),
 		GeminiModelPriority:    os.Getenv("GEMINI_MODEL_PRIORITY"),
 		GeminiEmbeddingModel:   getEnv("GEMINI_EMBEDDING_MODEL", "gemini-embedding-001"),
+		LLMProvider:            getEnv("LLM_PROVIDER", "gemini"),
+		LLMBaseURL:             os.Getenv("LLM_BASE_URL"),
+		LLMAPIKey:              os.Getenv("LLM_API_KEY"),
+		LLMModel:               os.Getenv("LLM_MODEL"),
+		LLMMaxTokens:           getEnv("LLM_MAX_TOKENS", "1024"),
+		LLMTimeout:             getEnv("LLM_TIMEOUT_SECONDS", "120"),
+		EmbeddingProvider:      os.Getenv("EMBEDDING_PROVIDER"),
 		VapidPublicKey:         os.Getenv("VAPID_PUBLIC_KEY"),
 		VapidPrivateKey:        os.Getenv("VAPID_PRIVATE_KEY"),
 		VapidSubject:           os.Getenv("VAPID_SUBJECT"),

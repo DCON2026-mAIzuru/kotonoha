@@ -89,6 +89,23 @@ func (e *chatServiceTestEmbedder) Embed(context.Context, llm.EmbeddingRequest) (
 	return []float64{0.1, 0.2, 0.3}, nil
 }
 
+func TestStreamReplyWithoutEmbeddingsStillSavesConversation(t *testing.T) {
+	t.Parallel()
+	store := &chatServiceTestStore{}
+	streamer := &chatServiceTestStreamer{reply: "こんにちは"}
+	service := NewChatService(store, streamer, nil)
+	err := service.StreamReply(context.Background(), StreamChatInput{UserID: "user-1", Text: "おはよう"}, func(string) error { return nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(store.createdHistory) != 2 || store.createdHistory[0].Role != "user" || store.createdHistory[1].Role != "assistant" {
+		t.Fatalf("conversation was not saved: %+v", store.createdHistory)
+	}
+	if len(store.createdMemories) != 0 {
+		t.Fatal("disabled embeddings must not create artificial memory vectors")
+	}
+}
+
 func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 	t.Parallel()
 
