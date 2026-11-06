@@ -75,13 +75,17 @@ Funnelの有効化が必要なアカウントでは、Tailscaleの案内に従�
 
 ## Colabの再接続
 
-2026年11月6日に、同じノートブックでA100接続と指定モデル `Qwen/Qwen3.8-27B` のダウンロード完了を確認しました。その後アイドル切断の通知が出たため、再接続後にランタイムとモデルの保存状態を確認する必要があります。LLMの起動はColab Secretsへの手動入力待ちで、認証付きAPIと実応答は未確認です。Mac側は `LLM_PROVIDER=disabled` を維持しています。
+2026年11月6日に、同じノートブックのA100 80GBで `Qwen/Qwen3.8-27B` を起動しました。公開モデルIDは `qwen38-27b` です。Macから認証付きAPIと内容を含むSSE完了を確認し、`LLM_PROVIDER=openai-compatible` に切り替えました。
 
 利用中のノートブックに接続し、既存サーバーの稼働を確認します。停止処理を含む古いセルを一括実行せず、必要なセルだけを実行してください。A100の割当失敗やreCAPTCHAエラーがある間は接続済みとして扱いません。
 
 認証付き `/v1/models` でモデルIDを確認し、MacからSSEが完了することを確認してから `LLM_PROVIDER=openai-compatible` に切り替えます。サーバーの認証は無効にしないでください。ColabのURLやキーが変わった場合は `backend/.env` だけを更新し、APIを含むMac側プロセスを再起動します。
 
-`deploy/colab/reconnect_cells.py` は、確認したノートブック構成から作成した個別実行用のセルです。モデルIDを推測で書き換えず、正常なサーバーがある場合は再利用します。キーをノートブック本文や出力に書かないでください。認証情報の設定とサーバー起動後は、次の補助スクリプトで未認証拒否・モデルID・SSE完了を検証してからMacの設定を更新できます。
+`deploy/colab/reconnect_cells.py` は、確認したノートブック構成から作成した個別実行用のセルです。モデルIDを推測で書き換えず、正常なサーバーがある場合は再利用します。キーをノートブック本文や出力に書かないでください。認証情報の設定とサーバー起動後は、次の補助スクリプトで未認証・誤ったキーの拒否、公開経路の制限、モデルID、SSE完了を検証してからMacの設定を更新できます。
+
+LLMの公開APIは `GET /v1/models` と `POST /v1/chat/completions` の2本だけです。ngrokのTraffic Policyでメソッド・正規化後のパス・元のパスを照合し、それ以外は404で拒否します。許可したAPIではvLLMのBearer認証も必要です。vLLM 0.33.0の `--api-key` は特定の接頭辞だけを認証対象にするため、`/invocations` や `/load` 等の公開をこれだけで防ぐことはできません。根拠は [vLLM 0.33.0の認証処理](https://github.com/vllm-project/vllm/blob/v0.33.0/vllm/entrypoints/serve/middleware/authenticate.py)、[ngrokのリクエスト変数](https://ngrok.com/docs/gateway/traffic-policy/variables/req)、[ngrokの応答による拒否](https://ngrok.com/docs/gateway/traffic-policy/actions/custom-response) を参照してください。
+
+セル5は同じ制限付きで作成したトンネルだけを再利用します。制限が確認できない既存トンネルがある場合は停止するので、対象を確認してそのトンネルだけを明示的に閉じ、古い `tunnel` 変数を削除してからセルを再実行してください。スクリプトが既存トンネルを自動で閉じることはありません。既存のvLLMプロセスが読み込み中の場合も、二重起動せず停止するので、起動状況とhealthを確認してから再実行してください。
 
 ```sh
 python3 deploy/colab/configure_mac_llm.py \
@@ -106,9 +110,9 @@ Colabは常設サーバーではありません。11月19日のデモ前に同�
 
 ## 機能の確認
 
-2026年11月6日に公開HTTPS URLで `verify.mjs` を実行し、LLM未接続を前提とした検証が成功しました。認証、アクセス制限、プロフィールの保存・再取得、WebSocket接続、送信したメッセージの履歴保存を確認しています。Funnelの公開リレー経由でも `/readyz` がHTTP 200を返すことを確認しました。
+2026年11月6日に公開HTTPS URLで `verify.mjs --expect-llm` を実行し、認証、アクセス制限、プロフィールの保存・再取得、実LLMの9チャンクのストリーミング完了を確認しました。今回の送信文と、受信した返答の本文に完全一致する新規履歴も確認しました。Funnelの公開リレー経由でも `/readyz` がHTTP 200を返しています。
 
-Chromeでも公開URLからログインして送信し、「LLMが未接続です」というエラーが表示されることを確認しました。実LLMによる応答生成は未確認です。画面の「チャット接続中」はWebSocket接続の状態を示します。
+Chromeの公開画面でも送信し、日本語の実返答が表示され、再読み込み後も同じ本文が残ることを確認しました。LLMを停止した状態では未接続エラーを表示することも確認済みです。画面の「チャット接続中」はWebSocket接続の状態を示します。
 
 ログイン後、盆栽の名前・性格を設定し、会話を送信します。現行版はユーザーごとに1つの盆栽プロフィールを持つ構成です。複数の盆栽から選ぶ一覧画面はありません。画面を再読み込みし、プロフィールと会話履歴が残ることを確かめてください。
 
@@ -125,7 +129,7 @@ node deploy/mac/verify.mjs --origin=https://公開ホスト
 node deploy/mac/verify.mjs --origin=https://公開ホスト --expect-llm
 ```
 
-![公開HTTPS URLでログインして送信した画面。LLM未接続エラーとセンサー未受信を表示](../images/mac-app.jpg)
+![公開HTTPS URLで実LLMの返答を確認した画面。センサーは未受信を表示](../images/mac-app.jpg)
 
 ## 停止とデータ保全
 

@@ -41,12 +41,16 @@ try {
   assert.equal(saved.status, 200);
   assert.equal((await (await request('/api/v1/profile')).json()).profile.name, profile.name);
   results.profile_saved_and_reloaded = 'passed';
+  const previousHistoryResponse = await request('/api/v1/chat/history');
+  assert.equal(previousHistoryResponse.status, 200);
+  const previousHistoryIDs = new Set((await previousHistoryResponse.json()).history.map((item) => item.id));
   const sent = '[接続確認] 日本語で短く挨拶してください。';
   const wsUrl = new URL('/ws/chat', origin);
   wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:';
   wsUrl.searchParams.set('token', token);
   const types = [];
   let chunks = 0;
+  let receivedReply = '';
   await new Promise((resolve, reject) => {
     const socket = new WebSocket(wsUrl, { origin: env.BACKEND_ALLOWED_ORIGIN });
     const timer = setTimeout(() => { socket.terminate(); reject(new Error('WebSocket timeout')); }, 150000);
@@ -56,10 +60,14 @@ try {
     socket.on('message', (data) => {
       try {
         const event = JSON.parse(data.toString());
+        if (event.source !== 'chat') return;
         types.push(event.type);
-        if (event.type === 'reply_chunk' && event.text) chunks += 1;
+        if (event.type === 'reply_chunk' && event.text) {
+          chunks += 1;
+          receivedReply += event.text;
+        }
         if (event.type === 'reply_done') {
-          assert.ok(expectLLM && chunks > 0);
+          assert.ok(expectLLM && chunks > 0 && receivedReply.trim());
           finish();
         }
         if (event.type === 'error') {
@@ -75,9 +83,10 @@ try {
   const historyResponse = await request('/api/v1/chat/history');
   assert.equal(historyResponse.status, 200);
   const history = (await historyResponse.json()).history;
-  assert.ok(history.some((item) => item.role === 'user' && item.content === sent));
-  if (expectLLM) assert.ok(history.some((item) => item.role === 'assistant' && item.content));
-  results.history_persistence = expectLLM ? 'user and assistant saved' : 'user message saved; LLM not tested';
+  const newHistory = history.filter((item) => !previousHistoryIDs.has(item.id));
+  assert.ok(newHistory.some((item) => item.role === 'user' && item.content === sent));
+  if (expectLLM) assert.ok(newHistory.some((item) => item.role === 'assistant' && item.content === receivedReply.trim()));
+  results.history_persistence = expectLLM ? 'new user message and exact streamed assistant response saved' : 'user message saved; LLM not tested';
   const sensor = await request('/api/v1/sensor');
   assert.equal(sensor.status, 200);
   results.sensor = 'endpoint reachable; physical device not verified';
