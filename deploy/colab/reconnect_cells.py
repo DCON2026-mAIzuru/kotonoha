@@ -40,7 +40,13 @@ from pathlib import Path
 VLLM_API_KEY = globals().get('VLLM_API_KEY') or os.environ.get('VLLM_API_KEY')
 NGROK_AUTHTOKEN = globals().get('NGROK_AUTHTOKEN') or os.environ.get('NGROK_AUTHTOKEN')
 if not VLLM_API_KEY or not NGROK_AUTHTOKEN:
-    raise RuntimeError('Missing secret: restore existing keys through an authorized secret store; never print them.')
+    from google.colab import userdata
+    if not VLLM_API_KEY:
+        VLLM_API_KEY = userdata.get('VLLM_API_KEY')
+    if not NGROK_AUTHTOKEN:
+        NGROK_AUTHTOKEN = userdata.get('NGROK_AUTHTOKEN')
+if not VLLM_API_KEY or not NGROK_AUTHTOKEN:
+    raise RuntimeError('Missing secret: save it in Colab Secrets and enable notebook access; never print it.')
 if not SERVER_ALREADY_RUNNING:
     with socket.socket() as probe:
         if probe.connect_ex(('127.0.0.1', PORT)) == 0:
