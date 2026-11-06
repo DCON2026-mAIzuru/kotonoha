@@ -8,6 +8,7 @@ const require = createRequire(new URL('frontend/package.json', root));
 const WebSocket = require('ws');
 const origin = process.argv.find((arg) => arg.startsWith('--origin='))?.slice(9) || 'http://127.0.0.1:8787';
 const expectLLM = process.argv.includes('--expect-llm');
+const expectServices = process.argv.includes('--expect-services');
 const credentials = JSON.parse(await readFile(new URL('.runtime/supabase-demo-user.json', root), 'utf8'));
 const env = Object.fromEntries((await readFile(new URL('backend/.env', root), 'utf8')).split('\n').filter((line) => line.includes('=') && !line.startsWith('#')).map((line) => [line.slice(0, line.indexOf('=')), line.slice(line.indexOf('=') + 1)]));
 const results = {};
@@ -19,6 +20,12 @@ async function request(path, options = {}) {
 try {
   assert.equal((await request('/readyz')).status, 200);
   assert.equal((await request('/api/v1/profile')).status, 401);
+  if (expectServices) {
+    assert.ok(expectLLM, '--expect-services requires --expect-llm');
+    for (const path of ['/api/v1/tts/voicevox', '/api/v1/chat/memories/search']) {
+      assert.equal((await request(path, { method: 'POST', body: JSON.stringify({ text: '確認', query: '確認' }) })).status, 401);
+    }
+  }
   for (const path of ['/supabase/auth/v1/admin/users', '/supabase/auth/v1/signup', '/supabase/auth/v1/invite']) {
     assert.equal((await request(path)).status, 404);
   }
@@ -33,6 +40,16 @@ try {
   assert.equal((await request('/supabase/auth/v1/user')).status, 200);
   assert.equal((await request('/api/v1/auth/me')).status, 200);
   results.authentication = 'passed';
+  if (expectServices) {
+    const voice = await request('/api/v1/tts/voicevox', { method: 'POST', body: JSON.stringify({ text: 'こんにちは。ことの葉です。' }) });
+    assert.equal(voice.status, 200);
+    assert.ok(voice.headers.get('content-type')?.includes('audio/wav'));
+    const wav = Buffer.from(await voice.arrayBuffer());
+    assert.ok(wav.length > 44);
+    assert.equal(wav.subarray(0, 4).toString(), 'RIFF');
+    assert.equal(wav.subarray(8, 12).toString(), 'WAVE');
+    results.voicevox = 'authenticated public API returned WAV';
+  }
   const profileResponse = await request('/api/v1/profile');
   assert.equal(profileResponse.status, 200);
   const existing = (await profileResponse.json()).profile;
@@ -87,6 +104,15 @@ try {
   assert.ok(newHistory.some((item) => item.role === 'user' && item.content === sent));
   if (expectLLM) assert.ok(newHistory.some((item) => item.role === 'assistant' && item.content === receivedReply.trim()));
   results.history_persistence = expectLLM ? 'new user message and exact streamed assistant response saved' : 'user message saved; LLM not tested';
+  if (expectServices) {
+    const search = await request('/api/v1/chat/memories/search', { method: 'POST', body: JSON.stringify({ query: sent, limit: 10 }) });
+    assert.equal(search.status, 200);
+    const { memories } = await search.json();
+    assert.ok(Array.isArray(memories) && memories.length > 0);
+    assert.ok(memories.every((memory) => memory.user_id === credentials.user_id));
+    assert.ok(memories.some((memory) => memory.summary.includes(sent) && memory.summary.includes(receivedReply.trim())));
+    results.semantic_memory = 'new completed conversation embedded, persisted, and retrieved for this user';
+  }
   const sensor = await request('/api/v1/sensor');
   assert.equal(sensor.status, 200);
   results.sensor = 'endpoint reachable; physical device not verified';

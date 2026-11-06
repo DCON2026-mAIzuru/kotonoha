@@ -12,8 +12,9 @@ type ChatHistoryEntry struct {
 }
 
 type CreateChatHistoryEntryInput struct {
-	UserID         string         `json:"-"`
-	Role           string         `json:"role"`
-	Content        string         `json:"content"`
-	SensorSnapshot map[string]any `json:"sensor_snapshot,omitempty"`
+	UserID           string         `json:"-"`
+	Role             string         `json:"role"`
+	Content          string         `json:"content"`
+	SensorSnapshot   map[string]any `json:"sensor_snapshot,omitempty"`
+	ReplyToMessageID string         `json:"-"`
 }

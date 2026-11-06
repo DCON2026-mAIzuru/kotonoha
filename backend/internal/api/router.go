@@ -89,6 +89,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		chatRoutes.Use(authMiddleware)
 		chatRoutes.GET("/history", chatHandler.History)
 		chatRoutes.DELETE("/history", chatHandler.ClearHistory)
+		chatRoutes.POST("/memories/search", chatHandler.SearchMemories)
 
 		sensorRoutes := apiV1.Group("/sensor")
 		sensorRoutes.Use(authMiddleware)

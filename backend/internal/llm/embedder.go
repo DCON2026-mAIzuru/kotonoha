@@ -20,6 +20,7 @@ type EmbeddingRequest struct {
 
 type Embedder interface {
 	Embed(ctx context.Context, req EmbeddingRequest) ([]float64, error)
+	Space() string
 }
 
 func NewEmbedder(geminiAPIKey string, geminiModel string) Embedder {

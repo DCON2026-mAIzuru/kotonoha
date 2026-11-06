@@ -34,6 +34,10 @@ func NewGeminiEmbedder(apiKey string, model string, httpClient *http.Client) *Ge
 	}
 }
 
+func (e *GeminiEmbedder) Space() string {
+	return "gemini:" + normalizeGeminiModelName(e.model) + ":retrieval:3072:v1"
+}
+
 func (e *GeminiEmbedder) Embed(ctx context.Context, req EmbeddingRequest) ([]float64, error) {
 	if strings.TrimSpace(req.Text) == "" {
 		return nil, errors.New("埋め込み対象テキストが空です")

@@ -1,6 +1,6 @@
 # MacでWebとAPIを動かし、ColabのLLMへ接続する
 
-Next.js、Go API、認証用Supabase AuthとPostgreSQLをMacに置きます。ColabにはLLMと接続用トンネルだけを置きます。Macのスリープ・再起動・回線切断中はWebを利用できず、Colabの切断中は会話を生成できません。
+Next.js、Go API、認証用Supabase Auth、PostgreSQL、VOICEVOX、意味検索用モデルをMacに置きます。ColabにはLLMと接続用トンネルだけを置きます。Macのスリープ・再起動・回線切断中はWebを利用できず、Colabの切断中は会話を生成できません。
 
 ## 公開経路
 
@@ -10,6 +10,7 @@ Next.js、Go API、認証用Supabase AuthとPostgreSQLをMacに置きます。Co
                                       ├─ /api/・/ws/      → Go API :8080
                                       └─ /supabase/auth/v1 → Supabase Auth :54321
 Go API → PostgreSQL :54322
+Go API → VOICEVOX :50021 / 意味検索モデル :50022
 Go API → HTTPS・Bearer認証 → ColabのLLM /v1/chat/completions
 ```
 
@@ -42,13 +43,47 @@ python3 deploy/mac/supabase/manage.py create-demo-user
 | backend | `LLM_PROVIDER` | 接続確認後は `openai-compatible`。未接続期間は `disabled` |
 | backend | `LLM_BASE_URL`、`LLM_MODEL`、`LLM_API_KEY` | 実際の `/v1` URL、`/v1/models`で確認したID、同サーバーの認証キー |
 | backend | `LLM_MAX_TOKENS`、`LLM_TIMEOUT_SECONDS` | 既定1024、120秒 |
-| backend | `EMBEDDING_PROVIDER` | 埋め込み未設定なら `disabled` |
+| backend | `EMBEDDING_PROVIDER` | Macの意味検索は `local`。未設定時は `disabled` |
+| backend | `EMBEDDING_BASE_URL`、`EMBEDDING_TIMEOUT_SECONDS` | `http://127.0.0.1:50022`、`30` |
+| backend | `VOICEVOX_ENGINE_URL` | `http://127.0.0.1:50021`（既定値） |
+| frontend | `NEXT_PUBLIC_VOICEVOX_CREDIT` | `VOICEVOX:青山龍星`。話者を変更したら更新する |
 | frontend | `NEXT_PUBLIC_SUPABASE_URL` | ローカルAuthは `https://公開ホスト/supabase` |
 | frontend | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | 公開可能なanon/publishableキー |
 | frontend | `NEXT_PUBLIC_API_BASE_URL`、`NEXT_PUBLIC_WS_URL` | 同一オリジン構成では空欄 |
 | frontend | `NEXT_PUBLIC_AUTH_ALLOW_SIGNUP`、`NEXT_PUBLIC_AUTH_GOOGLE_ENABLED` | このローカル構成では `false` |
 
 `NEXT_PUBLIC_*`はビルド時に取り込まれます。変更した場合は再ビルドしてください。サーバーだけの環境変数はAPIの再起動で反映します。
+
+## 音声と意味検索
+
+VOICEVOXは公式0.26.1のARM64 CPUイメージを使います。意味検索は `intfloat/multilingual-e5-small` の重みとtokenizerをrevision・SHA256で固定し、MacのONNX Runtimeで実行します。どちらもloopback限定です。ブラウザは認証付きGo APIを通して利用します。
+
+```sh
+python3 deploy/mac/voicevox/manage.py pull
+python3 deploy/mac/voicevox/manage.py start
+python3 deploy/mac/embeddings/manage.py install
+python3 deploy/mac/embeddings/manage.py start
+python3 deploy/mac/embeddings/manage.py verify
+```
+
+既存DBへは追加migrationだけを適用します。`migrate` は適用済みファイルのchecksumを確認し、非公開バックアップを作ってから1つのトランザクションで更新します。旧migrationは再実行しません。初回の `migrate-new` で最新ファイルまで適用済みなら、下記は何も変更しません。
+
+```sh
+python3 deploy/mac/supabase/manage.py migrate --file 20261106010000_add_memory_embedding_space.sql
+```
+
+`backend/.env` に `EMBEDDING_PROVIDER=local` と `EMBEDDING_BASE_URL=http://127.0.0.1:50022` を設定します。成功した会話は以降、自動で意味検索用の記憶にも保存されます。埋め込みに失敗した会話や、モデル変更前の会話は次のコマンドで取り込めます。最初は対象件数だけを表示し、`--apply` 付きで保存します。どちらも会話本文や接続キーを出力しません。
+
+```sh
+cd backend
+go run ./cmd/memory-backfill
+go run ./cmd/memory-backfill --apply
+cd ..
+```
+
+1回の上限は100組です。対象が残っていれば繰り返します。新しい応答には元の発言IDを記録し、その関係を使って取り込みます。返信関係のない旧履歴は既定で除外します。旧履歴だけは、元の発言と応答のペアを確認し、Web/APIを停止したうえで `--legacy-adjacent` を追加できます。隣接行の推定は並列送信の履歴を誤結合し得るため、未確認のログへは使いません。返答のない発言は取り込まず、同じ応答を重複登録しません。通常の会話履歴は保持します。異なる埋め込みモデル・revisionのベクトルは別の空間として保存・検索します。E5の384次元ベクトルには末尾ゼロを追加して既存の3072次元DBに保存します。この処理でコサイン類似度は変わりません。
+
+画面の音声ボタンをオンにすると、以後の返答を読み上げます。音声クレジットは **VOICEVOX:青山龍星** です。話者の利用条件、個別サービスの起動・停止と検証は [VOICEVOX手順](../../deploy/mac/voicevox/README.md)、[意味検索手順](../../deploy/mac/embeddings/README.md) を参照してください。[E5公式モデルカード](https://huggingface.co/intfloat/multilingual-e5-small)
 
 ## 起動と公開
 
@@ -71,7 +106,7 @@ tailscale funnel --bg --https=443 http://127.0.0.1:8787
 
 Funnelの有効化が必要なアカウントでは、Tailscaleの案内に従います。既存の公開設定がある場合は上書きせず、ポート・ホストを調整してください。URLはコマンドの実行結果を使います。Funnelの設定は [公式CLI資料](https://tailscale.com/docs/reference/tailscale-cli/funnel) を参照してください。
 
-起動したプロセスとログは `.runtime/` で管理します。Macの再起動後はDocker、Supabase、Webを再度起動します。起動スクリプトは自動ログインやOS起動設定を変更しません。サービスのどれかが終了した場合は関連するWeb/APIプロセスも停止します。ログを確認してから再起動してください。
+起動したプロセスとログは `.runtime/` で管理します。Macの再起動後はDocker、Supabase、VOICEVOX、意味検索モデル、Webの順に再度起動します。起動スクリプトは自動ログインやOS起動設定を変更しません。サービスのどれかが終了した場合は関連するWeb/APIプロセスも停止します。ログを確認してから再起動してください。
 
 ## Colabの再接続
 
@@ -112,6 +147,10 @@ Colabは常設サーバーではありません。11月19日のデモ前に同�
 
 2026年11月6日に公開HTTPS URLで `verify.mjs --expect-llm` を実行し、認証、アクセス制限、プロフィールの保存・再取得、実LLMの9チャンクのストリーミング完了を確認しました。今回の送信文と、受信した返答の本文に完全一致する新規履歴も確認しました。Funnelの公開リレー経由でも `/readyz` がHTTP 200を返しています。
 
+同日にVOICEVOXと意味検索も有効にしました。更新後の `--expect-llm --expect-services` は、認証付き音声WAV、実LLMの11チャンクの応答、新しい応答の履歴保存・ベクトル保存・検索まで成功しています。既存8件の履歴は内容ハッシュが一致し、確認済みの成功会話2組を取り込みました。取り込みの再実行は候補0件です。別の一時アカウント2つを使う実DB検証では、日本語の言い換え6件、ユーザー分離6件、空間分離3件を確認し、検証用データは削除済みです。
+
+ブラウザでは音声をオンにして送信し、返答表示と読み上げ中・完了の状態遷移を確認しました。音声エラーはなく、WAVは24kHz・16bit・monoで非無音でした。主観的な声質の評価は行っていません。
+
 Chromeの公開画面でも送信し、日本語の実返答が表示され、再読み込み後も同じ本文が残ることを確認しました。LLMを停止した状態では未接続エラーを表示することも確認済みです。画面の「チャット接続中」はWebSocket接続の状態を示します。
 
 ログイン後、盆栽の名前・性格を設定し、会話を送信します。現行版はユーザーごとに1つの盆栽プロフィールを持つ構成です。複数の盆栽から選ぶ一覧画面はありません。画面を再読み込みし、プロフィールと会話履歴が残ることを確かめてください。
@@ -126,7 +165,7 @@ node deploy/mac/verify.mjs --origin=http://127.0.0.1:8787
 node deploy/mac/verify.mjs --origin=https://公開ホスト
 
 # 公開URLと実LLMの接続が完了した後
-node deploy/mac/verify.mjs --origin=https://公開ホスト --expect-llm
+node deploy/mac/verify.mjs --origin=https://公開ホスト --expect-llm --expect-services
 ```
 
 ![公開HTTPS URLで実LLMの返答を確認した画面。センサーは未受信を表示](../images/mac-app.jpg)
@@ -137,6 +176,8 @@ node deploy/mac/verify.mjs --origin=https://公開ホスト --expect-llm
 # この公開ポートをことの葉だけで使用していることを確認する
 tailscale funnel --https=443 off
 python3 deploy/mac/manage.py stop
+python3 deploy/mac/embeddings/manage.py stop
+python3 deploy/mac/voicevox/manage.py stop
 python3 deploy/mac/supabase/manage.py stop
 ```
 

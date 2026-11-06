@@ -16,6 +16,10 @@ func NewFallbackEmbedder() *FallbackEmbedder {
 	return &FallbackEmbedder{}
 }
 
+func (e *FallbackEmbedder) Space() string {
+	return "fallback:fnv64a:3072:v1"
+}
+
 func (e *FallbackEmbedder) Embed(ctx context.Context, req EmbeddingRequest) ([]float64, error) {
 	select {
 	case <-ctx.Done():

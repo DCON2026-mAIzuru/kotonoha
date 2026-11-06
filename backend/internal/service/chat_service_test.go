@@ -18,6 +18,8 @@ type chatServiceTestStore struct {
 	memories        []models.BonsaiMemory
 	createdHistory  []models.CreateChatHistoryEntryInput
 	createdMemories []models.CreateBonsaiMemoryInput
+	matchedUserID   string
+	matchedSpace    string
 }
 
 func (s *chatServiceTestStore) CreateChatHistoryEntry(_ context.Context, input models.CreateChatHistoryEntryInput) (*models.ChatHistoryEntry, error) {
@@ -60,7 +62,8 @@ func (s *chatServiceTestStore) ListRecentChatHistoryByUserID(context.Context, st
 	return s.recentHistory, nil
 }
 
-func (s *chatServiceTestStore) MatchBonsaiMemories(context.Context, string, []float64, int) ([]models.BonsaiMemory, error) {
+func (s *chatServiceTestStore) MatchBonsaiMemories(_ context.Context, userID string, _ []float64, space string, _ int) ([]models.BonsaiMemory, error) {
+	s.matchedUserID, s.matchedSpace = userID, space
 	return s.memories, nil
 }
 
@@ -85,6 +88,8 @@ func (s *chatServiceTestStreamer) StreamChat(_ context.Context, req llm.ChatRequ
 
 type chatServiceTestEmbedder struct{}
 
+func (e *chatServiceTestEmbedder) Space() string { return "test:space" }
+
 func (e *chatServiceTestEmbedder) Embed(context.Context, llm.EmbeddingRequest) ([]float64, error) {
 	return []float64{0.1, 0.2, 0.3}, nil
 }
@@ -103,6 +108,9 @@ func TestStreamReplyWithoutEmbeddingsStillSavesConversation(t *testing.T) {
 	}
 	if len(store.createdMemories) != 0 {
 		t.Fatal("disabled embeddings must not create artificial memory vectors")
+	}
+	if store.createdHistory[1].ReplyToMessageID != "history-user" {
+		t.Fatal("successful response must retain its actual user message ID even without embeddings")
 	}
 }
 
@@ -210,6 +218,9 @@ func TestStreamReplyBuildsDynamicPrompt(t *testing.T) {
 	}
 	if len(store.createdMemories) != 1 {
 		t.Fatalf("expected 1 archived memory, got %d", len(store.createdMemories))
+	}
+	if store.matchedUserID != "user-1" || store.matchedSpace != "test:space" || store.createdMemories[0].EmbeddingSpace != "test:space" {
+		t.Fatal("retrieval and storage must use the authenticated user and same embedding space")
 	}
 }
 

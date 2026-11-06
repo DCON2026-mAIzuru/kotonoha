@@ -27,7 +27,19 @@ private `kotonoha_deploy` schema. A repeat with the same migrations does nothing
 Existing application tables without that deployment history, or changed
 migration files, cause an error. This protects the existing migration that
 truncates vector memories from being replayed against an established database.
-Future migrations need a separately reviewed incremental deployment.
+For an existing initialized database, review the next migration and apply only
+that file:
+
+```sh
+python3 deploy/mac/supabase/manage.py migrate --file YYYYMMDDHHMMSS_description.sql
+```
+
+This checks the checksums of every applied migration, refuses out-of-order
+updates, saves a private `pg_dump` backup under `.runtime/migration-backups/`,
+and applies the selected file plus its history record in one transaction under
+an advisory lock. Repeating an already recorded file does not replay SQL.
+It does not restore a backup automatically or decide whether arbitrary SQL is
+safe; review the selected migration before running it.
 
 `create-demo-user` creates one confirmed local demonstration account, verifies
 password login, and writes its email, random password and user ID to
@@ -84,7 +96,8 @@ python3 deploy/mac/supabase/manage.py start
 Stopping preserves the `kotonoha-supabase` project volumes and private
 configuration. Do not remove its volumes or delete the private configuration to
 restart it. The generated database passwords must stay with their database.
-There is no automatic backup or deletion command in this helper.
+The incremental `migrate` command makes a backup before each new migration.
+There is no automatic deletion or restore command in this helper.
 
 If a Compose command fails, inspect `.runtime/supabase-error.log` locally. That
 file can contain sensitive connection details and must not be pasted into chat.

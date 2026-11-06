@@ -163,6 +163,58 @@ CREATE TABLE kotonoha_deploy.migrations (filename text PRIMARY KEY, checksum tex
     print(f"Initialized {count} application migrations on the new database.")
 
 
+def migrate_incremental(filename):
+    """Apply one explicitly selected, reviewed migration without replaying history."""
+    if not re.fullmatch(r"[0-9]{14}_[A-Za-z0-9_]+\.sql", filename):
+        raise RuntimeError("--file must be a migration filename, not a path.")
+    files = {path.name: path for path in sorted(MIGRATIONS.glob("*.sql"))}
+    if filename not in files:
+        raise RuntimeError("The selected migration does not exist.")
+    expected = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in files.items()}
+    if sql("SELECT to_regclass('kotonoha_deploy.migrations') IS NOT NULL;") != "t":
+        raise RuntimeError("Deployment history is missing; incremental migration refused.")
+    current = dict(line.split("|", 1) for line in sql("SELECT filename, checksum FROM kotonoha_deploy.migrations ORDER BY filename;").splitlines())
+    if not current or any(expected.get(name) != checksum for name, checksum in current.items()):
+        raise RuntimeError("Applied migration history differs from the files; migration refused.")
+    if filename in current:
+        print("Selected migration is already applied; no SQL replayed.")
+        return
+    pending = sorted(set(files) - set(current))
+    if filename != pending[0] or any(name > filename for name in current):
+        raise RuntimeError("Only the next pending migration can be applied.")
+
+    # 保存先はGit対象外・本人のみ読める。DB内容を標準出力へ流さない。
+    backup = compose("exec", "-T", "db", "pg_dump", "-U", "postgres", "-d", "postgres", capture=True)
+    if not backup.strip():
+        raise RuntimeError("Database backup was empty; migration refused.")
+    backup_path = RUNTIME / "migration-backups" / (time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(8) + "-" + filename)
+    private_write(backup_path, backup)
+
+    source = re.sub(r"^\s*(?:begin|commit);\s*$", "", files[filename].read_text(), flags=re.IGNORECASE | re.MULTILINE)
+    if hashlib.sha256(files[filename].read_bytes()).hexdigest() != expected[filename]:
+        raise RuntimeError("Selected migration changed during preparation; retry after review.")
+    # ロック取得後も履歴を再照合し、同時実行による再適用を防ぐ。
+    history_values = ",".join("('%s','%s')" % (name.replace("'", "''"), checksum) for name, checksum in sorted(current.items()))
+    sql("\n".join([
+        "BEGIN;", "SELECT pg_advisory_xact_lock(1263817800);",
+        "CREATE TEMP TABLE expected_migrations (filename text, checksum text) ON COMMIT DROP;",
+        "INSERT INTO expected_migrations VALUES " + history_values + ";",
+        """DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM (
+            (SELECT filename, checksum FROM kotonoha_deploy.migrations EXCEPT SELECT * FROM expected_migrations)
+            UNION ALL
+            (SELECT * FROM expected_migrations EXCEPT SELECT filename, checksum FROM kotonoha_deploy.migrations)
+          ) AS difference) THEN
+            RAISE EXCEPTION 'Migration history changed; retry after review';
+          END IF;
+        END $$;""",
+        source,
+        f"INSERT INTO kotonoha_deploy.migrations (filename, checksum) VALUES ('{filename}', '{expected[filename]}');",
+        "COMMIT;",
+    ]))
+    print(f"Applied {filename}; private database backup saved under .runtime/migration-backups/.")
+
+
 def auth_request(path, method="GET", body=None, token=None):
     headers = {"Content-Type": "application/json"}
     if token:
@@ -219,6 +271,8 @@ def main():
     sub = parser.add_subparsers(dest="action", required=True)
     prepare_parser = sub.add_parser("prepare", help="Generate private secrets once; configure the public origin.")
     prepare_parser.add_argument("--site-url", required=True)
+    migration_parser = sub.add_parser("migrate", help="Back up the DB and apply one reviewed pending migration.")
+    migration_parser.add_argument("--file", required=True)
     for action in ("start", "stop", "status", "migrate-new", "create-demo-user"):
         sub.add_parser(action)
     args = parser.parse_args()
@@ -233,6 +287,8 @@ def main():
             print("Supabase services stopped; database volumes and private configuration preserved.")
         elif args.action == "migrate-new":
             migrate_new()
+        elif args.action == "migrate":
+            migrate_incremental(args.file)
         elif args.action == "create-demo-user":
             create_demo_user()
         else:

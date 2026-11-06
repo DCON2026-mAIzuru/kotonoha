@@ -29,6 +29,8 @@ type Config struct {
 	LLMMaxTokens           string
 	LLMTimeout             string
 	EmbeddingProvider      string
+	EmbeddingBaseURL       string
+	EmbeddingTimeout       string
 	VapidPublicKey         string
 	VapidPrivateKey        string
 	VapidSubject           string
@@ -69,6 +71,8 @@ func Load() (*Config, error) {
 		LLMMaxTokens:           getEnv("LLM_MAX_TOKENS", "1024"),
 		LLMTimeout:             getEnv("LLM_TIMEOUT_SECONDS", "120"),
 		EmbeddingProvider:      os.Getenv("EMBEDDING_PROVIDER"),
+		EmbeddingBaseURL:       getEnv("EMBEDDING_BASE_URL", "http://127.0.0.1:50022"),
+		EmbeddingTimeout:       getEnv("EMBEDDING_TIMEOUT_SECONDS", "30"),
 		VapidPublicKey:         os.Getenv("VAPID_PUBLIC_KEY"),
 		VapidPrivateKey:        os.Getenv("VAPID_PRIVATE_KEY"),
 		VapidSubject:           os.Getenv("VAPID_SUBJECT"),

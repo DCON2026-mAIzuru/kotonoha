@@ -45,10 +45,18 @@ func (disabledStreamer) StreamChat(context.Context, ChatRequest, func(string) er
 
 // Embeddings are independent of the chat model. Without a configured embedding
 // provider, history is still saved but no artificial vectors enter the database.
-func NewConfiguredEmbedder(provider, geminiAPIKey, geminiModel string) (Embedder, error) {
-	provider = strings.ToLower(strings.TrimSpace(provider))
+type EmbedderConfig struct {
+	Provider     string
+	BaseURL      string
+	Timeout      time.Duration
+	GeminiAPIKey string
+	GeminiModel  string
+}
+
+func NewConfiguredEmbedder(ctx context.Context, cfg EmbedderConfig) (Embedder, error) {
+	provider := strings.ToLower(strings.TrimSpace(cfg.Provider))
 	if provider == "" {
-		if strings.TrimSpace(geminiAPIKey) == "" {
+		if strings.TrimSpace(cfg.GeminiAPIKey) == "" {
 			provider = "disabled"
 		} else {
 			provider = "gemini"
@@ -58,13 +66,15 @@ func NewConfiguredEmbedder(provider, geminiAPIKey, geminiModel string) (Embedder
 	case "disabled":
 		return nil, nil
 	case "gemini":
-		if strings.TrimSpace(geminiAPIKey) == "" {
+		if strings.TrimSpace(cfg.GeminiAPIKey) == "" {
 			return nil, errors.New("EMBEDDING_PROVIDER=gemini には GEMINI_API_KEY が必要です")
 		}
-		return NewEmbedder(geminiAPIKey, geminiModel), nil
+		return NewEmbedder(cfg.GeminiAPIKey, cfg.GeminiModel), nil
+	case "local":
+		return NewLocalEmbedder(ctx, cfg.BaseURL, cfg.Timeout)
 	case "fallback":
 		return NewFallbackEmbedder(), nil
 	default:
-		return nil, errors.New("EMBEDDING_PROVIDER は gemini、disabled、fallback のいずれかを設定してください")
+		return nil, errors.New("EMBEDDING_PROVIDER は local、gemini、disabled、fallback のいずれかを設定してください")
 	}
 }

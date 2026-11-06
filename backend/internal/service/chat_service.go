@@ -22,6 +22,7 @@ type chatLLMStreamer interface {
 
 type chatTextEmbedder interface {
 	Embed(ctx context.Context, req llm.EmbeddingRequest) ([]float64, error)
+	Space() string
 }
 
 type chatStore interface {
@@ -33,7 +34,7 @@ type chatStore interface {
 	GetLatestBonsaiDiagnosis(ctx context.Context, userID string) (*models.BonsaiDiagnosis, error)
 	GetSensorDataByUserID(ctx context.Context, userID string) (*models.SensorData, error)
 	ListRecentChatHistoryByUserID(ctx context.Context, userID string, limit int) ([]models.ChatHistoryEntry, error)
-	MatchBonsaiMemories(ctx context.Context, userID string, embedding []float64, limit int) ([]models.BonsaiMemory, error)
+	MatchBonsaiMemories(ctx context.Context, userID string, embedding []float64, space string, limit int) ([]models.BonsaiMemory, error)
 	UpdateBonsaiBondScore(ctx context.Context, userID string, score int) (*models.BonsaiProfile, error)
 }
 
@@ -167,10 +168,11 @@ func (s *ChatService) StreamReply(ctx context.Context, input StreamChatInput, on
 	}
 
 	assistantEntry, err := s.store.CreateChatHistoryEntry(ctx, models.CreateChatHistoryEntryInput{
-		UserID:         input.UserID,
-		Role:           "assistant",
-		Content:        replyText,
-		SensorSnapshot: buildChatSensorSnapshot(sensorData),
+		UserID:           input.UserID,
+		Role:             "assistant",
+		Content:          replyText,
+		SensorSnapshot:   buildChatSensorSnapshot(sensorData),
+		ReplyToMessageID: userEntry.ID,
 	})
 	if err != nil {
 		return err
@@ -261,9 +263,14 @@ func (s *ChatService) SearchRelevantMemories(ctx context.Context, userID string,
 		return nil, errors.New("ユーザーIDが空です")
 	case query == "":
 		return nil, errors.New("検索クエリが空です")
+	case len([]rune(query)) > 2000:
+		return nil, errors.New("検索クエリは2000文字以内で入力してください")
 	}
 	if limit <= 0 {
 		limit = 3
+	}
+	if limit > 10 {
+		limit = 10
 	}
 
 	embedding, err := s.embedder.Embed(ctx, llm.EmbeddingRequest{
@@ -274,7 +281,7 @@ func (s *ChatService) SearchRelevantMemories(ctx context.Context, userID string,
 		return nil, fmt.Errorf("検索クエリの埋め込み生成に失敗しました: %w", err)
 	}
 
-	return s.store.MatchBonsaiMemories(ctx, userID, embedding, limit)
+	return s.store.MatchBonsaiMemories(ctx, userID, embedding, s.embedder.Space(), limit)
 }
 
 func (s *ChatService) buildChatSystemPrompt(
@@ -331,25 +338,37 @@ func (s *ChatService) buildChatSystemPrompt(
 }
 
 func (s *ChatService) archiveConversationTurn(ctx context.Context, input StreamChatInput, replyText string, userMessageID string, assistantMessageID string) error {
-	if s.embedder == nil {
+	return archiveConversationMemory(ctx, s.store, s.embedder, models.ConversationMemoryPair{
+		UserID: input.UserID, UserMessageID: userMessageID, AssistantMessageID: assistantMessageID,
+		UserText: input.Text, AssistantText: replyText,
+	})
+}
+
+type memoryWriter interface {
+	CreateBonsaiMemory(context.Context, models.CreateBonsaiMemoryInput) error
+}
+
+func archiveConversationMemory(ctx context.Context, store memoryWriter, embedder chatTextEmbedder, pair models.ConversationMemoryPair) error {
+	if embedder == nil {
 		return errors.New("埋め込み生成器が設定されていません")
 	}
 
-	summary := buildConversationSummary(input.Text, replyText)
-	embedding, err := s.embedder.Embed(ctx, llm.EmbeddingRequest{
+	summary := buildConversationSummary(pair.UserText, pair.AssistantText)
+	embedding, err := embedder.Embed(ctx, llm.EmbeddingRequest{
 		Text:     summary,
 		TaskType: llm.EmbeddingTaskRetrievalDocument,
-		Title:    truncateRunes(input.Text, 80),
+		Title:    truncateRunes(pair.UserText, 80),
 	})
 	if err != nil {
 		return fmt.Errorf("会話ターンの埋め込み生成に失敗しました: %w", err)
 	}
 
-	if err := s.store.CreateBonsaiMemory(ctx, models.CreateBonsaiMemoryInput{
-		UserID:           input.UserID,
+	if err := store.CreateBonsaiMemory(ctx, models.CreateBonsaiMemoryInput{
+		UserID:           pair.UserID,
 		Summary:          summary,
-		SourceMessageIDs: []string{userMessageID, assistantMessageID},
+		SourceMessageIDs: []string{pair.UserMessageID, pair.AssistantMessageID},
 		Embedding:        embedding,
+		EmbeddingSpace:   embedder.Space(),
 	}); err != nil {
 		return err
 	}

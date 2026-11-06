@@ -50,3 +50,15 @@ func TestSwaggerEndpointsAndRouteCoverage(t *testing.T) {
 		}
 	}
 }
+
+func TestMemorySearchRequiresAuthentication(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := NewRouter(Dependencies{Config: &config.Config{BackendAllowedOrigin: "http://localhost:3000"}})
+	w := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/chat/memories/search", strings.NewReader(`{"query":"水やり","user_id":"someone-else"}`))
+	req.Header.Set("Content-Type", "application/json")
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated search returned %d", w.Code)
+	}
+}

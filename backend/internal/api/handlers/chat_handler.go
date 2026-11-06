@@ -87,6 +87,29 @@ func (h *ChatHandler) ClearHistory(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"result": result})
 }
 
+func (h *ChatHandler) SearchMemories(c *gin.Context) {
+	user, ok := middleware.CurrentUser(c)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"message": "認証ユーザーが見つかりません"})
+		return
+	}
+	var input struct {
+		Query string `json:"query"`
+		Limit int    `json:"limit"`
+	}
+	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, 16384)
+	if err := c.ShouldBindJSON(&input); err != nil || strings.TrimSpace(input.Query) == "" || len([]rune(input.Query)) > 2000 || input.Limit < 0 || input.Limit > 10 {
+		c.JSON(http.StatusBadRequest, gin.H{"message": "queryは1〜2000文字、limitは0〜10で指定してください"})
+		return
+	}
+	memories, err := h.chatService.SearchRelevantMemories(c.Request.Context(), user.ID, input.Query, input.Limit)
+	if err != nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"message": "意味検索を利用できません。埋め込みサービスの状態を確認してください"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"memories": memories})
+}
+
 func (h *ChatHandler) Chat(c *gin.Context) {
 	user, ok := middleware.CurrentUser(c)
 	if !ok {

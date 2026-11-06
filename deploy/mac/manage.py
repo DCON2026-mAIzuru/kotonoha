@@ -185,7 +185,7 @@ def main():
             print('管理対象のプロセスは起動していません')
     elif action == 'status':
         print('管理プロセス: ' + ('起動中' if active_pid() else '停止'))
-        for label, url in [('Web', 'http://127.0.0.1:8787/'), ('API/DB', 'http://127.0.0.1:8787/readyz')]:
+        for label, url in [('Web', 'http://127.0.0.1:8787/'), ('API/DB', 'http://127.0.0.1:8787/readyz'), ('VOICEVOX', 'http://127.0.0.1:50021/version'), ('意味検索モデル', 'http://127.0.0.1:50022/health')]:
             print(label + ': ' + ('応答あり' if http_ok(url) else '応答なし'))
     elif action == 'check-llm':
         env = read_env(ROOT / 'backend/.env')

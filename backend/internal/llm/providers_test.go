@@ -35,14 +35,14 @@ func TestConfiguredProvidersDoNotSilentlyUseFallbacks(t *testing.T) {
 	if _, err := NewConfiguredStreamer(StreamerConfig{Provider: "typo"}); err == nil {
 		t.Fatal("unknown provider must fail")
 	}
-	embedder, err := NewConfiguredEmbedder("", "", "")
+	embedder, err := NewConfiguredEmbedder(context.Background(), EmbedderConfig{})
 	if err != nil || embedder != nil {
 		t.Fatalf("unconfigured embeddings must be disabled, got %T, %v", embedder, err)
 	}
-	if _, err := NewConfiguredEmbedder("gemini", "", ""); err == nil {
+	if _, err := NewConfiguredEmbedder(context.Background(), EmbedderConfig{Provider: "gemini"}); err == nil {
 		t.Fatal("explicit Gemini embeddings require a key")
 	}
-	embedder, err = NewConfiguredEmbedder("disabled", "existing-gemini-key", "")
+	embedder, err = NewConfiguredEmbedder(context.Background(), EmbedderConfig{Provider: "disabled", GeminiAPIKey: "existing-gemini-key"})
 	if err != nil || embedder != nil {
 		t.Fatal("explicit disabled must override existing Gemini credentials")
 	}
