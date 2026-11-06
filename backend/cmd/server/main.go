@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -42,8 +44,33 @@ func main() {
 		log.Fatalf("JWT検証器の初期化に失敗しました: %v", err)
 	}
 
-	llmStreamer := llm.NewStreamer(cfg.GeminiAPIKey, cfg.GeminiModel, cfg.GeminiModelPriority)
-	llmEmbedder := llm.NewEmbedder(cfg.GeminiAPIKey, cfg.GeminiEmbeddingModel)
+	llmStreamer, err := llm.NewConfiguredStreamer(llm.StreamerConfig{
+		Provider: cfg.LLMProvider, BaseURL: cfg.LLMBaseURL, APIKey: cfg.LLMAPIKey, Model: cfg.LLMModel,
+		MaxTokens: parsePositiveInt(cfg.LLMMaxTokens, 1024), Timeout: time.Duration(parsePositiveInt(cfg.LLMTimeout, 120)) * time.Second,
+		GeminiAPIKey: cfg.GeminiAPIKey, GeminiModel: cfg.GeminiModel, GeminiModelPriority: cfg.GeminiModelPriority,
+	})
+	if err != nil {
+		log.Fatalf("会話モデルの設定に失敗しました: %v", err)
+	}
+	llmEmbedder, err := llm.NewConfiguredEmbedder(ctx, llm.EmbedderConfig{
+		Provider: cfg.EmbeddingProvider, BaseURL: cfg.EmbeddingBaseURL,
+		Timeout:      time.Duration(parsePositiveInt(cfg.EmbeddingTimeout, 30)) * time.Second,
+		GeminiAPIKey: cfg.GeminiAPIKey, GeminiModel: cfg.GeminiEmbeddingModel,
+	})
+	if err != nil {
+		log.Fatalf("埋め込みモデルの設定に失敗しました: %v", err)
+	}
+	if llmEmbedder == nil {
+		log.Println("長期記憶のベクトル検索・保存は無効です。会話履歴の保存は継続します")
+	} else {
+		log.Printf("長期記憶の埋め込み空間を確認しました: space=%s", llmEmbedder.Space())
+	}
+	if strings.EqualFold(strings.TrimSpace(cfg.LLMProvider), "disabled") {
+		log.Println("LLM_PROVIDER=disabled: LLMが未接続です。Colabの復旧と接続設定が必要です。会話生成はエラーを返します")
+	}
+	if cfg.LLMProvider == "fallback" || cfg.EmbeddingProvider == "fallback" {
+		log.Println("開発用の代替応答・埋め込みが選択されています。実際のモデルによる生成ではありません")
+	}
 	realtimeHub := realtime.NewHub()
 	pushSender := pushtransport.NewSender(cfg.VapidPublicKey, cfg.VapidPrivateKey, cfg.VapidSubject)
 	dlTimeoutSeconds := parsePositiveInt(cfg.DLServiceTimeout, 90)
@@ -74,7 +101,7 @@ func main() {
 
 	engine := api.NewRouter(deps)
 	server := &http.Server{
-		Addr:              ":" + cfg.BackendPort,
+		Addr:              net.JoinHostPort(cfg.BackendHost, cfg.BackendPort),
 		Handler:           engine,
 		ReadHeaderTimeout: 5 * time.Second,
 	}

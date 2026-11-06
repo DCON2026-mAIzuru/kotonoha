@@ -25,6 +25,9 @@ function ensurePath(urlString: string): string {
 export function resolveWebSocketUrl(explicitWsUrl?: string): string {
   const wsEnv = (explicitWsUrl || '').trim();
   if (wsEnv !== '') {
+    if (wsEnv.startsWith('/') && typeof window !== 'undefined') {
+      return ensurePath(withWsScheme(new URL(wsEnv, window.location.origin).toString()));
+    }
     return ensurePath(withWsScheme(wsEnv));
   }
 
@@ -35,8 +38,8 @@ export function resolveWebSocketUrl(explicitWsUrl?: string): string {
 
   if (typeof window !== 'undefined') {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${protocol}//${window.location.hostname}:8080${FALLBACK_WS_PATH}`;
+    return `${protocol}//${window.location.host}${FALLBACK_WS_PATH}`;
   }
 
-  return `ws://localhost:8080${FALLBACK_WS_PATH}`;
+  return FALLBACK_WS_PATH;
 }

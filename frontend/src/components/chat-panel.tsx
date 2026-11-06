@@ -17,6 +17,7 @@ interface ChatPanelProps {
 
 const QUICK_PROMPTS = ['今日の様子を教えて', '水やりは必要？', '光は足りていそう？'] as const;
 const PRESENTATION_ACTION_ENABLED = process.env.NEXT_PUBLIC_PRESENTATION_DEMO_MODE === 'true';
+const VOICEVOX_CREDIT = process.env.NEXT_PUBLIC_VOICEVOX_CREDIT || 'VOICEVOX:青山龍星';
 
 /* ── SVG icons (ported from bonsAI reference) ── */
 function LeafMark() {
@@ -130,8 +131,6 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   });
   const isStreaming = useMemo(() => messages.some((m) => m.role === 'assistant' && m.text === ''), [messages]);
   const presentationActionReady = PRESENTATION_ACTION_ENABLED && presentationActionApiEnabled === true;
-  const presentAsConnected = presentationActionReady && (!sensorData || sensorData.sensor_status === 'stale' || Boolean(sensorError));
-  const visibleSensorError = presentAsConnected ? '' : sensorError;
 
   const loadSensorData = useCallback(async (options?: { showLoading?: boolean; isManualRefresh?: boolean }) => {
     const showLoading = options?.showLoading ?? false;
@@ -163,9 +162,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   useEffect(() => { onStatusChange?.(status); }, [status, onStatusChange]);
 
   useEffect(() => {
-    const nextState = presentAsConnected
-      ? 'connected'
-      : sensorError
+    const nextState = sensorError
       ? 'error'
       : sensorLoading
         ? 'loading'
@@ -177,7 +174,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
               ? 'invalid'
               : 'none';
     onSensorStateChange?.(nextState);
-  }, [presentAsConnected, sensorData, sensorError, sensorLoading, onSensorStateChange]);
+  }, [sensorData, sensorError, sensorLoading, onSensorStateChange]);
 
   useEffect(() => {
     let cancelled = false;
@@ -320,10 +317,8 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   const sensorUpdatedLabel = sensorData
     ? new Date(sensorData.recorded_at).toLocaleString('ja-JP', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     : '';
-  const displaySensorStatus = presentAsConnected ? 'normal' : (sensorData?.sensor_status ?? 'unknown');
-  const sensorStatusLabel = presentAsConnected
-    ? '正常'
-    : sensorData
+  const displaySensorStatus = sensorData?.sensor_status ?? 'unknown';
+  const sensorStatusLabel = sensorData
     ? sensorData.sensor_status === 'invalid'
       ? '一部異常'
       : sensorData.sensor_status === 'stale'
@@ -409,30 +404,33 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
   };
 
   const renderVoiceControls = () => (
-    <div className="k-voice-controls" aria-label="音声読み上げ">
-      <span className="k-voice-label">音声</span>
-      <button
-        type="button"
-        className={`k-voice-toggle${speech.enabled ? ' k-voice-toggle-on' : ''}`}
-        role="switch"
-        aria-checked={speech.enabled}
-        aria-label={speech.enabled ? '音声読み上げをオフにする' : '音声読み上げをオンにする'}
-        title={speech.supported ? 'VOICEVOXで読み上げ' : 'このブラウザは音声再生に対応していません'}
-        disabled={!speech.supported}
-        onClick={() => speech.setEnabled(!speech.enabled)}
-      >
-        {speech.enabled ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
-      </button>
-      <button
-        type="button"
-        className="k-voice-stop-btn"
-        aria-label="読み上げを停止する"
-        title="停止"
-        disabled={!speech.enabled || !speech.speaking}
-        onClick={speech.stop}
-      >
-        <Square aria-hidden="true" />
-      </button>
+    <div className="k-voice-group">
+      <div className="k-voice-controls" aria-label="音声読み上げ">
+        <span className="k-voice-label">音声</span>
+        <button
+          type="button"
+          className={`k-voice-toggle${speech.enabled ? ' k-voice-toggle-on' : ''}`}
+          role="switch"
+          aria-checked={speech.enabled}
+          aria-label={speech.enabled ? '音声読み上げをオフにする' : '音声読み上げをオンにする'}
+          title={speech.supported ? 'VOICEVOXで読み上げ' : 'このブラウザは音声再生に対応していません'}
+          disabled={!speech.supported}
+          onClick={() => speech.setEnabled(!speech.enabled)}
+        >
+          {speech.enabled ? <Volume2 aria-hidden="true" /> : <VolumeX aria-hidden="true" />}
+        </button>
+        <button
+          type="button"
+          className="k-voice-stop-btn"
+          aria-label="読み上げを停止する"
+          title="停止"
+          disabled={!speech.enabled || !speech.speaking}
+          onClick={speech.stop}
+        >
+          <Square aria-hidden="true" />
+        </button>
+      </div>
+      <small className="k-voice-credit">{VOICEVOX_CREDIT}</small>
     </div>
   );
 
@@ -534,7 +532,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
               <span className="k-sensor-chip k-sensor-chip-compact">
                 <LeafMark />
                 <span className="k-sensor-chip-label">デバイス</span>
-                <span className="k-sensor-chip-value">{sensorData?.device_id || (presentAsConnected ? 'ことの葉01' : '---')}</span>
+                <span className="k-sensor-chip-value">{sensorData?.device_id || '---'}</span>
               </span>
               <span className={`k-sensor-chip k-sensor-chip-compact k-sensor-chip-status-${displaySensorStatus}`}>
                 <LeafMark />
@@ -768,7 +766,7 @@ export function ChatPanel({ token, bonsaiName, bonsaiSpecies, onStatusChange, on
             <p>
               {isStreaming
                 ? `${bonsaiName} が言葉を選んでいます...`
-                : (errorMessage || visibleSensorError || diagnosisMessage || backendStatusText)}
+                : (errorMessage || sensorError || diagnosisMessage || backendStatusText)}
             </p>
             <div className="k-composer-actions">
               {speech.errorMessage && (

@@ -16,7 +16,7 @@ export function KotonohaApp() {
   const [profile, setProfile] = useState<BonsaiProfile | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
   const [profileError, setProfileError] = useState('');
-  const [llmOnline, setLlmOnline] = useState(false);
+  const [chatOnline, setChatOnline] = useState(false);
   const [espState, setEspState] = useState<'loading' | 'connected' | 'stale' | 'invalid' | 'error' | 'none'>('loading');
   const [showPush, setShowPush] = useState(false);
   const [showDiagnosis, setShowDiagnosis] = useState(false);
@@ -109,6 +109,8 @@ export function KotonohaApp() {
           onSignIn={auth.signInWithPassword}
           onSignUp={auth.signUpWithPassword}
           onGoogleSignIn={auth.signInWithGoogle}
+          allowSignUp={process.env.NEXT_PUBLIC_AUTH_ALLOW_SIGNUP !== 'false'}
+          googleEnabled={process.env.NEXT_PUBLIC_AUTH_GOOGLE_ENABLED !== 'false'}
         />
       </div>
     );
@@ -203,9 +205,9 @@ export function KotonohaApp() {
 
         <div className="k-hero-status">
           <div className="k-status-pills">
-            <span className={`k-status-pill${llmOnline ? ' k-status-pill-online' : ''}`}>
+            <span className={`k-status-pill${chatOnline ? ' k-status-pill-online' : ''}`}>
               <span className="k-status-dot" />
-              {llmOnline ? 'LLM 接続中' : 'LLM オフライン'}
+              {chatOnline ? 'チャット接続中' : 'チャット未接続'}
             </span>
             <span className={`k-status-pill k-status-pill-esp${espOnline ? ' k-status-pill-online' : ''}`}>
               <span className="k-status-dot" />
@@ -381,7 +383,7 @@ export function KotonohaApp() {
           token={auth.accessToken}
           bonsaiName={profile.name}
           bonsaiSpecies={profile.personality}
-          onStatusChange={(status) => setLlmOnline(status === 'open')}
+          onStatusChange={(status) => setChatOnline(status === 'open')}
           onSensorStateChange={setEspState}
         />
       </main>

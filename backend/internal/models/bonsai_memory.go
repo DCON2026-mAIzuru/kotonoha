@@ -16,4 +16,13 @@ type CreateBonsaiMemoryInput struct {
 	Summary          string
 	SourceMessageIDs []string
 	Embedding        []float64
+	EmbeddingSpace   string
+}
+
+type ConversationMemoryPair struct {
+	UserID             string
+	UserMessageID      string
+	AssistantMessageID string
+	UserText           string
+	AssistantText      string
 }

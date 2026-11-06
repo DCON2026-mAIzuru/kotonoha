@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"strings"
 	"time"
 
@@ -30,7 +31,12 @@ type Dependencies struct {
 
 func NewRouter(deps Dependencies) *gin.Engine {
 	engine := gin.New()
-	engine.Use(gin.Logger())
+	engine.Use(gin.LoggerWithConfig(gin.LoggerConfig{
+		Formatter: func(params gin.LogFormatterParams) string {
+			// WebSocket authentication uses ?token=. Never put query values in logs.
+			return fmt.Sprintf("[HTTP] %s | %d | %s | %s %s\n", params.TimeStamp.Format(time.RFC3339), params.StatusCode, params.Latency, params.Method, params.Request.URL.Path)
+		},
+	}))
 	engine.Use(gin.Recovery())
 	engine.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{deps.Config.BackendAllowedOrigin},
@@ -83,6 +89,7 @@ func NewRouter(deps Dependencies) *gin.Engine {
 		chatRoutes.Use(authMiddleware)
 		chatRoutes.GET("/history", chatHandler.History)
 		chatRoutes.DELETE("/history", chatHandler.ClearHistory)
+		chatRoutes.POST("/memories/search", chatHandler.SearchMemories)
 
 		sensorRoutes := apiV1.Group("/sensor")
 		sensorRoutes.Use(authMiddleware)

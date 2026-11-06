@@ -1,0 +1,27 @@
+name: kotonoha-voicevox
+
+services:
+  engine:
+    # Official 0.26.1 CPU image; the digest identifies the linux/arm64 manifest.
+    image: voicevox/voicevox_engine:cpu-arm64-ubuntu24.04-0.26.1@sha256:25f800a116d544bfcbc31831204e897a0622ff617e7e110c8304d29ae4b65cf3
+    platform: linux/arm64
+    ports:
+      - "127.0.0.1:50021:50021"
+    command:
+      - --host
+      - 0.0.0.0
+      - --port
+      - "50021"
+      - --cpu_num_threads
+      - "2"
+      - --cors_policy_mode
+      - localapps
+      - --disable_mutable_api
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"

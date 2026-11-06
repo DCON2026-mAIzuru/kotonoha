@@ -36,3 +36,7 @@ docs/DESIGN.md
 /DL/venv/
 /DL/.venv/
 /DL/__pycache__/
+
+# Mac deployment state and binaries (includes private logs)
+/.runtime/
+__pycache__/

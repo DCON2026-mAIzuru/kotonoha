@@ -11,20 +11,27 @@ import (
 )
 
 func (s *PostgresStore) CreateChatHistoryEntry(ctx context.Context, input models.CreateChatHistoryEntryInput) (*models.ChatHistoryEntry, error) {
+	if input.ReplyToMessageID != "" && input.Role != "assistant" {
+		return nil, errors.New("返信先IDはassistant履歴だけに指定できます")
+	}
 	payload, err := json.Marshal(input.SensorSnapshot)
 	if err != nil {
 		return nil, fmt.Errorf("会話履歴 sensor_snapshot の変換に失敗しました: %w", err)
 	}
 
 	const query = `
-		insert into public.chat_history (user_id, role, content, sensor_snapshot)
-		values ($1, $2, $3, $4)
+		insert into public.chat_history (user_id, role, content, sensor_snapshot, reply_to_message_id)
+		select $1, $2, $3, $4, nullif($5, '')::uuid
+		where $5 = '' or exists (
+			select 1 from public.chat_history source
+			where source.id = nullif($5, '')::uuid and source.user_id = $1::uuid and source.role = 'user'
+		)
 		returning id, user_id, role, content, sensor_snapshot, created_at
 	`
 
 	var entry models.ChatHistoryEntry
 	var raw []byte
-	if err := s.pool.QueryRow(ctx, query, input.UserID, input.Role, input.Content, payload).Scan(
+	if err := s.pool.QueryRow(ctx, query, input.UserID, input.Role, input.Content, payload, input.ReplyToMessageID).Scan(
 		&entry.ID,
 		&entry.UserID,
 		&entry.Role,

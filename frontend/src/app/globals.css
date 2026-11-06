@@ -496,6 +496,20 @@ button { appearance: none; }
 
 .k-lang-toggle-on .k-lang-thumb { transform: translateX(18px); }
 
+.k-voice-group {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.k-voice-credit {
+  color: var(--muted);
+  font-size: 0.625rem;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
 .k-voice-controls {
   display: inline-flex;
   align-items: center;

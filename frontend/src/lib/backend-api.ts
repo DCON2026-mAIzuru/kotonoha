@@ -1,6 +1,7 @@
 import type { BonsaiDiagnosis, BonsaiProfile, ChatHistoryEntry, MoistureControl, PresentationDemoResult, PresentationDemoStatus, PushSubscriptionRecord, SensorData, UpsertProfileInput } from '@/types/api';
 
-const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8080').replace(/\/$/, '');
+// An empty base URL uses the origin serving the app (including a Mac reverse proxy).
+export const apiBaseUrl = (process.env.NEXT_PUBLIC_API_BASE_URL || '').trim().replace(/\/$/, '');
 
 type JsonBody = Record<string, unknown>;
 

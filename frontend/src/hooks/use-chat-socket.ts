@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, RealtimeMessage, TypingProfile } from '@/types/api';
-import { getChatHistory } from '@/lib/backend-api';
+import { apiBaseUrl, getChatHistory } from '@/lib/backend-api';
 import { resolveWebSocketUrl } from '@/lib/ws-url';
 
 const defaultWsUrl = process.env.NEXT_PUBLIC_WS_URL || '';
-const defaultApiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
 type UseChatSocketOptions = {
   onAssistantReplyComplete?: (text: string) => void;
@@ -18,25 +17,11 @@ function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
 }
 
-function resolveApiBaseUrl(): string {
-  const env = defaultApiBaseUrl.trim();
-  if (env !== '') {
-    return env.replace(/\/$/, '');
-  }
-
-  if (typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.hostname}:8080`;
-  }
-
-  return 'http://localhost:8080';
-}
-
 export function useChatSocket(token: string, enabled: boolean, options?: UseChatSocketOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [status, setStatus] = useState<'idle' | 'connecting' | 'open' | 'closed' | 'error'>('idle');
   const [errorMessage, setErrorMessage] = useState<string>('');
   const wsUrl = useMemo(() => resolveWebSocketUrl(defaultWsUrl), []);
-  const apiBaseUrl = useMemo(() => resolveApiBaseUrl(), []);
 
   const socketRef = useRef<WebSocket | null>(null);
   const activeAssistantIdRef = useRef<string | null>(null);
@@ -161,7 +146,7 @@ export function useChatSocket(token: string, enabled: boolean, options?: UseChat
     });
   }, []);
 
-  const connect = useCallback(async () => {
+  const connect = useCallback(async (signal: AbortSignal) => {
     if (!enabled || !token) {
       return;
     }
@@ -176,14 +161,19 @@ export function useChatSocket(token: string, enabled: boolean, options?: UseChat
           Authorization: `Bearer ${token}`,
         },
         cache: 'no-store',
+        signal,
       });
 
+      if (signal.aborted) return;
       if (!authProbe.ok) {
         setStatus('error');
-        setErrorMessage('認証セッションが無効です。再ログインしてください。');
+        setErrorMessage(authProbe.status === 401 || authProbe.status === 403
+          ? '認証セッションが無効です。再ログインしてください。'
+          : '盆栽サーバーに接続できません。しばらくしてから再接続してください。');
         return;
       }
     } catch {
+      if (signal.aborted) return;
       setStatus('error');
       setErrorMessage('認証確認APIに接続できません。バックエンド起動状態を確認してください。');
       return;
@@ -206,11 +196,12 @@ export function useChatSocket(token: string, enabled: boolean, options?: UseChat
     };
 
     socket.onclose = (event) => {
+      if (signal.aborted) return;
       setStatus('closed');
       if (event.code !== 1000) {
         if (event.code === 1006) {
           setErrorMessage(
-            'WebSocket接続が切断されました (code=1006)。認証切れの可能性があるため再ログインしてください。',
+            'チャット接続が切断されました。ネットワークと盆栽サーバーの状態を確認して、再読み込みしてください。',
           );
         } else {
           setErrorMessage(`WebSocket接続が切断されました (code=${event.code}, endpoint=${wsUrl})`);
@@ -218,6 +209,8 @@ export function useChatSocket(token: string, enabled: boolean, options?: UseChat
       }
       activeAssistantIdRef.current = null;
       activeEventIdRef.current = null;
+      resetAssistantTyping();
+      setMessages((current) => current.filter((message) => !(message.role === 'assistant' && message.text === '')));
     };
 
     socket.onmessage = (event) => {
@@ -298,7 +291,7 @@ export function useChatSocket(token: string, enabled: boolean, options?: UseChat
         ]);
       }
     };
-  }, [apiBaseUrl, appendChunk, enabled, enqueueAssistantChunk, finishAssistantIfReady, resetAssistantTyping, startAssistantTypingLoop, token, wsUrl]);
+  }, [appendChunk, enabled, enqueueAssistantChunk, finishAssistantIfReady, resetAssistantTyping, startAssistantTypingLoop, token, wsUrl]);
 
   useEffect(() => {
     if (!enabled || !token || historyLoadedRef.current) return;
@@ -317,9 +310,11 @@ export function useChatSocket(token: string, enabled: boolean, options?: UseChat
   }, [enabled, token]);
 
   useEffect(() => {
-    connect();
+    const controller = new AbortController();
+    void connect(controller.signal);
 
     return () => {
+      controller.abort();
       resetAssistantTyping();
       socketRef.current?.close();
       socketRef.current = null;

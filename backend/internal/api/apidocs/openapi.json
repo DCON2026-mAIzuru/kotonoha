@@ -470,6 +470,96 @@
         ]
       }
     },
+    "/api/v1/chat/memories/search": {
+      "post": {
+        "tags": [
+          "Chat"
+        ],
+        "summary": "認証ユーザーの会話記憶を意味検索",
+        "description": "現在の埋め込み空間のみを検索します。対象ユーザーはJWTから決定します。",
+        "security": [
+          {
+            "BearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "query"
+                ],
+                "properties": {
+                  "query": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  },
+                  "limit": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 10,
+                    "default": 3
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "成功",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "memories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "id",
+                          "summary",
+                          "created_at"
+                        ],
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "format": "uuid"
+                          },
+                          "summary": {
+                            "type": "string"
+                          },
+                          "similarity": {
+                            "type": "number"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "検索条件が不正"
+          },
+          "401": {
+            "description": "認証エラー"
+          },
+          "503": {
+            "description": "意味検索を利用できない"
+          }
+        }
+      }
+    },
     "/api/v1/chat/history": {
       "get": {
         "tags": [
